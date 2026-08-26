@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
-import Image from "next/image";
 import Link from "next/link";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,7 +25,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <header className="border-b border-border/70 bg-card">
               <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-4 sm:gap-8 sm:px-5">
                 <Link href="/" className="flex items-center gap-2.5 font-serif text-[19px] font-semibold tracking-tight">
-                  <Image src="/icon-512.png" alt="" width={22} height={22} className="size-[22px] rounded-[5px]" priority />
+                  {/* Plain <img>: next/image caches optimised copies by URL and kept serving a stale icon after the file changed. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/brand/marrow-mark.png?v=2" alt="" width={22} height={22} className="size-[22px] rounded-[5px]" />
                   Marrow
                 </Link>
                 <nav className="flex items-center gap-4 text-[13px] text-muted-foreground sm:gap-5">
