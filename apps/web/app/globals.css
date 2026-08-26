@@ -108,40 +108,49 @@
 
 .dark {
   color-scheme: dark;
-  /* Slate: every neutral carries a little blue (hue ≈ 258) so the surface reads as one material, not gray. */
-  --background: oklch(0.17 0.022 258);
-  --foreground: oklch(0.95 0.008 250);
-  --card: oklch(0.2 0.024 258);
-  --card-foreground: oklch(0.95 0.008 250);
-  --popover: oklch(0.21 0.024 258);
-  --popover-foreground: oklch(0.95 0.008 250);
-  --primary: oklch(0.95 0.008 250);
-  --primary-foreground: oklch(0.17 0.022 258);
-  --secondary: oklch(0.27 0.026 258);
-  --secondary-foreground: oklch(0.95 0.008 250);
-  --muted: oklch(0.24 0.025 258);
-  --muted-foreground: oklch(0.7 0.02 255);
-  --accent: oklch(0.27 0.026 258);
-  --accent-foreground: oklch(0.95 0.008 250);
+  /*
+   * Charcoal ladder (owner palette) used tonally, deepest → lightest:
+   *   #111111 page · #151515 lifted panels · #20201F wells (inputs, hover, code) · #2D2D2D hairlines + key bottoms · #343434 key faces + hover borders
+   * Everything else is derived from these with color-mix so the set stays five colours.
+   */
+  --ink-0: #111111;
+  --ink-1: #151515;
+  --ink-2: #20201F;
+  --ink-3: #2d2d2d;
+  --ink-4: #343434;
+  --background: var(--ink-0);
+  --foreground: #ececea;
+  --card: var(--ink-1);
+  --card-foreground: #ececea;
+  --popover: var(--ink-1);
+  --popover-foreground: #ececea;
+  --primary: #ececea;
+  --primary-foreground: var(--ink-0);
+  --secondary: var(--ink-2);
+  --secondary-foreground: #ececea;
+  --muted: var(--ink-2);
+  --muted-foreground: #9a9a96;
+  --accent: var(--ink-3);
+  --accent-foreground: #ececea;
   --destructive: oklch(0.7 0.19 22);
-  --border: oklch(0.31 0.028 258);
-  --input: oklch(0.29 0.027 258);
-  --ring: oklch(0.6 0.03 255);
+  --border: var(--ink-3);
+  --input: var(--ink-2);
+  --ring: color-mix(in oklch, var(--ink-4), white 25%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.2 0.024 258);
-  --sidebar-foreground: oklch(0.95 0.008 250);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.95 0.008 250);
-  --sidebar-accent: oklch(0.27 0.026 258);
-  --sidebar-accent-foreground: oklch(0.95 0.008 250);
-  --sidebar-border: oklch(0.31 0.028 258);
-  --sidebar-ring: oklch(0.6 0.03 255);
+  --sidebar: var(--ink-1);
+  --sidebar-foreground: #ececea;
+  --sidebar-primary: #ececea;
+  --sidebar-primary-foreground: var(--ink-0);
+  --sidebar-accent: var(--ink-2);
+  --sidebar-accent-foreground: #ececea;
+  --sidebar-border: var(--ink-3);
+  --sidebar-ring: color-mix(in oklch, var(--ink-4), white 25%);
   --time: oklch(0.72 0.17 22);
-  --time-foreground: oklch(0.14 0.02 258);
+  --time-foreground: var(--ink-0);
   --kind-paper: #3987e5;
   --kind-tool: #d95926;
   --kind-technique: #199e70;
@@ -149,16 +158,16 @@
   --kind-person: #d55181;
   --kind-repo: #9085e9;
   --kind-other: #8a8985;
-  /* Keycaps: a lit top face, a darker bottom face, and the edge you press down onto. */
-  --key-top: oklch(0.4 0.03 258);
-  --key-bottom: oklch(0.3 0.028 258);
-  --key-border: oklch(0.47 0.032 258);
-  --key-edge: oklch(0.14 0.02 258);
-  --key-primary-top: oklch(1 0 0);
-  --key-primary-bottom: oklch(0.86 0.012 250);
-  --key-primary-border: oklch(0.98 0 0);
-  --key-primary-edge: oklch(0.55 0.02 255);
-  --key-primary-text: oklch(0.15 0.02 258);
+  /* Keycaps: face #343434 → #2D2D2D, a lighter rim, and the page colour as the edge you press down onto. */
+  --key-top: var(--ink-4);
+  --key-bottom: var(--ink-3);
+  --key-border: color-mix(in oklch, var(--ink-4), white 14%);
+  --key-edge: var(--ink-0);
+  --key-primary-top: #ffffff;
+  --key-primary-bottom: #d9d9d6;
+  --key-primary-border: #ffffff;
+  --key-primary-edge: #8c8c89;
+  --key-primary-text: var(--ink-0);
 }
 
 @layer base {
@@ -309,7 +318,8 @@
 [data-slot="input"],
 [data-slot="textarea"],
 textarea {
-  box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  background: var(--ink-2, var(--input));
+  box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.02);
 }
 
 /* Reading text — the serif is for what you read, never for chrome. */

@@ -49,7 +49,7 @@ export function Chat({ itemId, seed, onSeedConsumed }: { itemId: string; seed?: 
   const busy = status === "submitted" || status === "streaming";
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] min-h-[480px] flex-col rounded-lg border border-border/70">
+    <div className="flex h-[calc(100vh-12rem)] min-h-[480px] flex-col rounded-lg border border-border/70 bg-card">
       <Conversation className="flex-1">
         <ConversationContent>
           {messages.length === 0 ? (

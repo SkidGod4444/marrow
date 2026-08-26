@@ -22,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
           <TooltipProvider>
-            <header className="border-b border-border/70">
+            <header className="border-b border-border/70 bg-card">
               <div className="mx-auto flex h-12 max-w-6xl items-center gap-8 px-5">
                 <Link href="/" className="font-serif text-[19px] font-semibold tracking-tight">
                   Marrow

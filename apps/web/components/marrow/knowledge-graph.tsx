@@ -157,7 +157,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
 
   return (
     <div ref={wrapRef} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="relative h-[calc(100vh-13rem)] min-h-[480px] overflow-hidden rounded-lg border border-border/70 bg-background">
+      <div className="relative h-[calc(100vh-13rem)] min-h-[480px] overflow-hidden rounded-lg border border-border/70 bg-card">
         <svg ref={svgRef} className="size-full touch-none select-none" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onClick={() => setSelected(null)}>
           <g transform={transform.toString()}>
             {links.map((l) => {
@@ -199,9 +199,9 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
                   }}
                 >
                   {n.type === "item" ? (
-                    <rect x={-n.r} y={-n.r} width={n.r * 2} height={n.r * 2} rx={3} fill="var(--foreground)" stroke={sel ? "var(--time)" : "var(--background)"} strokeWidth={sel ? 2.5 : 2} />
+                    <rect x={-n.r} y={-n.r} width={n.r * 2} height={n.r * 2} rx={3} fill="var(--foreground)" stroke={sel ? "var(--time)" : "var(--card)"} strokeWidth={sel ? 2.5 : 2} />
                   ) : (
-                    <circle r={n.r} fill={kindColor(n.kind)} stroke={sel ? "var(--time)" : "var(--background)"} strokeWidth={sel ? 2.5 : 2} />
+                    <circle r={n.r} fill={kindColor(n.kind)} stroke={sel ? "var(--time)" : "var(--card)"} strokeWidth={sel ? 2.5 : 2} />
                   )}
                   {showLabel(n) && (
                     <text
@@ -212,7 +212,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
                       fontWeight={n.type === "item" ? 600 : sel ? 600 : 400}
                       fill={n.type === "item" ? "var(--foreground)" : "var(--muted-foreground)"}
                       paintOrder="stroke"
-                      stroke="var(--background)"
+                      stroke="var(--card)"
                       strokeWidth={3}
                       strokeLinejoin="round"
                     >
@@ -226,7 +226,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
         </svg>
 
         <div className="absolute left-3 top-3 flex items-center gap-2">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a node…" className="h-7 w-52 bg-background/90 text-[13px] backdrop-blur" aria-label="Find a node" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a node…" className="h-7 w-52 text-[13px]" aria-label="Find a node" />
           {query && (
             <Button variant="outline" size="icon-sm" aria-label="Clear search" onClick={() => setQuery("")}>
               <X />
@@ -244,7 +244,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
             <Scan />
           </Button>
         </div>
-        <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/70 bg-background/90 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground backdrop-blur">
+        <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/70 bg-card/90 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground backdrop-blur">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block size-2.5 rounded-[2px] bg-foreground" /> video
           </span>
