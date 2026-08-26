@@ -126,7 +126,7 @@ export function PlayerFrame({ className = "", collapsed = false, frames = [] }: 
       {/* `collapsed` hides the picture but keeps the iframe mounted, so audio and the control bar keep working. */}
       <div className={`relative w-full [&:fullscreen]:flex-1 [&>div]:size-full [&_iframe]:size-full ${collapsed ? "h-0" : "aspect-video"}`}>
         <div ref={host.hostRef} className="size-full" />
-        {host.videoId ? (
+        {collapsed ? null : host.videoId ? (
           <>
             {(showPoster || showPaused) && (
               <div className="absolute inset-0 bg-black">
