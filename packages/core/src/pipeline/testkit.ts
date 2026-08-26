@@ -102,6 +102,17 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       hit("cutAudio");
       await writeFile(out, "fake-chunk");
     },
+    async extractEvenFrames(_video, outDir, everyS) {
+      hit("extractEvenFrames");
+      await mkdir(outDir, { recursive: true });
+      const out = [];
+      for (let t = everyS, i = 0; t < duration; t += everyS, i++) {
+        const p = join(outDir, `${String(i + 1).padStart(5, "0")}.jpg`);
+        await writeFile(p, FAKE_JPEG);
+        out.push({ t, score: 0.05, path: p });
+      }
+      return out;
+    },
     async extractKeyframes(_video, outDir) {
       hit("extractKeyframes");
       await mkdir(outDir, { recursive: true });

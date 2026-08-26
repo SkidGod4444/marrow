@@ -109,6 +109,16 @@ export async function extractKeyframes(cfg: Config, video: string, outDir: strin
   return parseKeyframeLog(stdout).map((k, i) => ({ ...k, path: join(outDir, `${String(i + 1).padStart(5, "0")}.jpg`) }));
 }
 
+/** Frames every `everyS` seconds — the density floor for videos whose visuals change smoothly (few scene cuts). */
+export async function extractEvenFrames(cfg: Config, video: string, outDir: string, everyS: number): Promise<Keyframe[]> {
+  await mkdir(outDir, { recursive: true });
+  const { stdout } = await exec(cfg.FFMPEG_BIN, [
+    "-y", "-hide_banner", "-loglevel", "error", "-i", video, "-vf", `fps=1/${everyS},metadata=print:file=-,scale=${cfg.FRAME_WIDTH}:-2`, "-fps_mode", "vfr", "-q:v", "3",
+    "-pix_fmt", "yuvj420p", "-strict", "unofficial", join(outDir, "%05d.jpg"),
+  ]);
+  return parseKeyframeLog(stdout).map((k, i) => ({ t: k.t, score: 0.05, path: join(outDir, `${String(i + 1).padStart(5, "0")}.jpg`) }));
+}
+
 export function parseKeyframeLog(stdout: string): Array<{ t: number; score: number }> {
   const out: Array<{ t: number; score: number }> = [];
   let current: { t: number; score: number } | null = null;

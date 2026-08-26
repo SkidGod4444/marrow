@@ -20,6 +20,7 @@ export interface Providers {
   detectSilences(path: string): Promise<Silence[]>;
   cutAudio(src: string, start: number, end: number, out: string): Promise<void>;
   extractKeyframes(video: string, outDir: string): Promise<Keyframe[]>;
+  extractEvenFrames(video: string, outDir: string, everyS: number): Promise<Keyframe[]>;
   transcribe(path: string, usage: UsageTracker): Promise<SttResult>;
   diarize(path: string, opts: { known?: KnownSpeaker[]; language?: string | null }, usage: UsageTracker): Promise<DiarSegment[]>;
   describeFrame(jpeg: Uint8Array, usage: UsageTracker): Promise<FrameDescription>;

@@ -36,6 +36,8 @@ export const ConfigSchema = z.object({
   FRAMES_PER_HOUR: z.coerce.number().default(120),
   SCENE_THRESHOLD: z.coerce.number().default(0.3),
   FRAME_MIN_GAP_S: z.coerce.number().default(2),
+  // Density floor: when scene detection finds fewer than one cut per this many seconds, sample evenly too.
+  FRAME_FLOOR_EVERY_S: z.coerce.number().default(90),
   FRAME_WIDTH: z.coerce.number().default(1280),
   MAX_VIDEO_HEIGHT: z.coerce.number().default(720),
   VISION_CONCURRENCY: z.coerce.number().default(6),

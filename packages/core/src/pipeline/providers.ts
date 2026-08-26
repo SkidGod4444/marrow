@@ -17,6 +17,7 @@ export function createProviders(cfg: Config): Providers {
     detectSilences: (path) => ffmpeg.detectSilences(cfg, path),
     cutAudio: (src, start, end, out) => ffmpeg.cutAudio(cfg, src, start, end, out),
     extractKeyframes: (video, outDir) => ffmpeg.extractKeyframes(cfg, video, outDir),
+    extractEvenFrames: (video, outDir, everyS) => ffmpeg.extractEvenFrames(cfg, video, outDir, everyS),
     transcribe: (path, usage) => transcribeFile(cfg, path, usage),
     diarize: (path, opts, usage) => diarizeFile(cfg, path, opts, usage),
     describeFrame: (jpeg, usage) => describeFrame(cfg, jpeg, usage),

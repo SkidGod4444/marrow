@@ -19,6 +19,14 @@ export const framesStage: StageFn = async (ctx) => {
   log("detecting scene changes");
   const found = await providers.extractKeyframes(src, dir);
   const cap = Math.max(8, Math.ceil((config.FRAMES_PER_HOUR * Math.max(doc.duration_s, 60)) / 3600));
+  // Smooth animations and static slides rarely trip scene detection; guarantee a minimum density so
+  // "what's on screen" and OCR still have something to look at.
+  const floor = Math.floor(Math.max(doc.duration_s, 60) / config.FRAME_FLOOR_EVERY_S);
+  if (found.length < floor) {
+    const even = await providers.extractEvenFrames(src, join(dir, "even"), config.FRAME_FLOOR_EVERY_S);
+    log(`${found.length} scene changes < floor ${floor} — added ${even.length} evenly sampled frames`);
+    found.push(...even);
+  }
   const kept = pruneFrames(found, { minGap: config.FRAME_MIN_GAP_S, max: cap });
   log(`${found.length} scene changes → keeping ${kept.length} keyframes (cap ${cap})`);
   await removeFiles(found.filter((f) => !kept.includes(f)).map((f) => f.path));
