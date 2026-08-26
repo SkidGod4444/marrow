@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   SOURCE_TYPES, createIngest, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
-  getNamespace, listItems, listNamespaces, lookupEntity, presentDocument,
+  getNamespace, getNamespaceGraph, listItems, listNamespaces, lookupEntity, presentDocument,
 } from "@marrow/core";
 import { type ServerDeps, runSearch } from "./deps.ts";
 
@@ -106,6 +106,22 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       try {
         const r = await lookupEntity(deps.db, { namespace, name });
         return r.result ? text(r.result) : text({ found: false, suggestions: r.suggestions });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_graph",
+    {
+      title: "Knowledge graph",
+      description: "The namespace as a graph: item nodes (videos) and entity nodes (papers, tools, repos, people, techniques), with item–entity edges weighted by mention count and carrying the stance mix (supports/opposes/neutral) and the first timestamp. Use it to see which sources connect, which entities are contested, and where to look next.",
+      inputSchema: { namespace: z.string(), max_entities: z.number().int().min(1).max(1000).default(150) },
+    },
+    async ({ namespace, max_entities }) => {
+      try {
+        return text(await getNamespaceGraph(deps.db, namespace, { maxEntities: max_entities }));
       } catch (err) {
         return fail((err as Error).message);
       }

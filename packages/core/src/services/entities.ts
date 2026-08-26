@@ -94,7 +94,7 @@ export async function lookupEntity(db: Db, input: { namespace: string; name: str
   const ns = await getNamespace(db, input.namespace);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const key = keyOf(input.name);
-  let [entity] = await db.select().from(entities).where(and(eq(entities.namespaceId, ns.id), eq(entities.nameKey, key)));
+  let entity: Entity | undefined = (await db.select().from(entities).where(and(eq(entities.namespaceId, ns.id), eq(entities.nameKey, key))))[0];
   if (!entity) {
     const like = `%${key.replace(/[%_]/g, "")}%`;
     const candidates = await db

@@ -25,6 +25,8 @@ export * from "./services/search.ts";
 export * from "./services/context.ts";
 export * from "./services/frames.ts";
 export * from "./services/export.ts";
+export * from "./services/chat.ts";
+export * from "./services/graph.ts";
 export * from "./media/ytdlp.ts";
 export { planChunks, pruneFrames, parseSilences, parseKeyframeLog } from "./media/ffmpeg.ts";
 export * from "./pipeline/testkit.ts";

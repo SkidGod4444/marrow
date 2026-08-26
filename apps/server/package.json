@@ -14,6 +14,7 @@
     "@hono/mcp": "^0.3.2",
     "@marrow/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "ai": "^7.0.82",
     "hono": "^4.13.5",
     "zod": "^4.4.3"
   }

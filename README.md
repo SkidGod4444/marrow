@@ -8,7 +8,8 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 
 - **Phase 1 — Ingestion core** ✅ `ingest <youtube-url>` runs pipeline stages 1–8 end to end.
 - **Phase 2 — MCP + REST** ✅ every PRD §8 tool over MCP (stdio + Streamable HTTP) and REST, hybrid search with RRF.
-- Phases 3–6 (reader + chat web app, subscriptions/inbox/novelty, capture, language mode) follow in order.
+- **Phase 3 — Web app** ✅ library → item page with Reader / Chat / Transcript, YouTube player that seeks on `[MM:SS]` citations, per-video chat (AI Elements + Vercel AI SDK) with `view_frame` / `web_search` / `fetch_url`, "What's on screen now", and a **knowledge graph** per namespace (`/namespaces/<name>/graph`, also `get_graph` over MCP/REST).
+- Phases 4–6 (subscriptions/inbox/novelty, capture, language mode) follow.
 
 ## Quick start (local, no Docker)
 
@@ -25,10 +26,26 @@ bun run cli doc <item_id>       # the video document JSON
 
 With no `DATABASE_URL` the CLI uses PGlite (Postgres-in-WASM) at `.marrow/pglite/` and local filesystem storage at `.marrow/storage/` — nothing to install. Re-running `ingest` on the same URL is a no-op once the item is `ready` (`--force` re-ingests at a new pipeline version; a failed job resumes at the failed stage).
 
+## Web app
+
+```bash
+bun run server                 # API + MCP + jobs on :3001
+cp apps/web/.env.example apps/web/.env.local   # MARROW_API_URL + MARROW_API_KEY
+bun run web                    # Next.js on :3000
+```
+
+`/` is the library (namespaces, items, an ingest form); `/items/<id>` is the item page: sticky YouTube player + **Reader** (summary, takeaways, sections with timestamp margin links, "Ask about this" → chat), **Chat** (cites `[MM:SS]`; clicking seeks the player; "What's on screen now" sends the playback position so the model calls `view_frame`), **Transcript** (follows the playhead). The browser never sees the API key — client calls go through `app/api/marrow/[...path]` which injects it.
+
+**Knowledge graph** — `/namespaces/<name>/graph` draws the namespace as item nodes (videos) and entity nodes (papers, tools, techniques, people, repos, datasets) joined by mention edges weighted by count; dashed edges carry an opposing claim. Click a node for its connections with first-mention timecodes (deep-linking into the item at that moment); search, per-kind filters, zoom, drag. Same data as the MCP `get_graph` tool.
+
+Stack: latest Next.js (App Router), Tailwind v4, shadcn/ui (`base-nova`), [AI Elements](https://elements.ai-sdk.dev) for the conversation/prompt/tool UI, Vercel AI SDK `useChat` ↔ the server's `POST /items/:id/chat` UI-message stream, d3-force for the graph. Type: Source Serif 4 for reading, IBM Plex Sans for chrome, IBM Plex Mono for timecodes and metadata.
+
+Offline UI work: `bun run scripts/seed-demo.ts 4` seeds a `demo` namespace through the fake pipeline (no yt-dlp/OpenAI).
+
 ## Full local stack (docker-compose)
 
 ```bash
-docker compose up --build       # Postgres + pgvector, MinIO (S3 API), and the Marrow server on :3001
+docker compose up --build       # Postgres + pgvector, MinIO (S3 API), server on :3001, web on :3000
 curl -X POST localhost:3001/namespaces -H 'content-type: application/json' -d '{"name":"sim-to-real"}'
 curl -X POST localhost:3001/ingest -H 'content-type: application/json' -d '{"namespace":"sim-to-real","url":"https://www.youtube.com/watch?v=…"}'
 curl localhost:3001/jobs/<job_id>
@@ -73,6 +90,8 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 | `POST /ingest {namespace,url,force?}` | `ingest` |
 | `GET /jobs/:id` | `job_status` |
 | `GET /items/:id/export.md?transcript=1` · `GET /namespaces/:ref/export.md` | `export_markdown` |
+| `GET /namespaces/:ref/graph?max_entities=150` | `get_graph` |
+| `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` | — (web app) |
 
 All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) when `MARROW_API_KEY` is set.
 
@@ -86,6 +105,8 @@ All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) whe
 | New migration after editing `packages/core/src/db/schema.ts` | `bun run db:generate` (then add any `CREATE EXTENSION` lines by hand) |
 | Apply migrations to `DATABASE_URL` | `bun run db:migrate` (the server and CLI also migrate on start) |
 | Run the server | `bun run server` (`server:dev` for watch mode) |
+| Run the web app | `bun run web` (needs `apps/web/.env.local`) · `bun run build` builds everything via Turborepo |
+| Deploy to AWS | `docs/DEPLOY.md` (EC2 + RDS + S3, `docker-compose.prod.yml` with Caddy HTTPS) |
 
 Tests run on an in-memory PGlite with fake providers — no network, no ffmpeg. Live tests against OpenAI are gated behind `LIVE=1`.
 
@@ -94,7 +115,7 @@ Tests run on an in-memory PGlite with fake providers — no network, no ffmpeg. 
 ```
 packages/core/   schema (Drizzle), video document types, storage (S3/local), OpenAI clients, pipeline, services
 apps/server/     one process: Hono REST API (+ MCP in Phase 2) + pg-boss job runner + CLI
-apps/web/        Phase 3: Next.js reader + chat
+apps/web/        Next.js app: library, item page (player + reader + chat + transcript), proxy route to the server
 docker/          server image (bun + ffmpeg + yt-dlp)
 docs/            PRD.mdx (normative), STACK.md (resolved tech choices)
 ```

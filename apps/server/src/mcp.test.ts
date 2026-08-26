@@ -40,7 +40,7 @@ describe("MCP server (Phase 2 acceptance)", () => {
 
   it("exposes every PRD §8 tool", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["export_markdown", "get_context", "get_frame", "get_video_document", "ingest", "job_status", "list_items", "list_namespaces", "lookup_entity", "search"]);
+    expect(names).toEqual(["export_markdown", "get_context", "get_frame", "get_graph", "get_video_document", "ingest", "job_status", "list_items", "list_namespaces", "lookup_entity", "search"]);
   });
 
   it("search over a 10-video namespace returns timestamped, deep-linked segments", async () => {
@@ -92,6 +92,20 @@ describe("MCP server (Phase 2 acceptance)", () => {
     expect(paper.entity.url).toBe("https://arxiv.org/abs/1703.06907");
     const missing = parse<{ found: boolean }>(await client.callTool({ name: "lookup_entity", arguments: { namespace: "inference", name: "nonexistent thing" } }));
     expect(missing.found).toBe(false);
+  });
+
+  it("get_graph returns item and entity nodes joined by stance-weighted mention edges", async () => {
+    const g = parse<{ nodes: Array<{ id: string; type: string; label: string; degree: number }>; edges: Array<{ source: string; target: string; weight: number; stances: { supports: number }; t_first: number | null }>; stats: { items: number; entities: number } }>(
+      await client.callTool({ name: "get_graph", arguments: { namespace: "inference" } }),
+    );
+    expect(g.stats).toMatchObject({ items: 10, entities: 2 });
+    expect(g.nodes.filter((n) => n.type === "item")).toHaveLength(10);
+    const dr = g.nodes.find((n) => n.type === "entity" && n.label === "Domain randomization")!;
+    expect(dr.degree).toBe(10);
+    expect(g.edges.filter((e) => e.source === dr.id)).toHaveLength(10);
+    expect(g.edges.every((e) => g.nodes.some((n) => n.id === e.target && n.type === "item"))).toBe(true);
+    expect(g.edges.find((e) => e.source === dr.id)!.stances.supports).toBe(1);
+    expect(typeof g.edges[0]!.t_first).toBe("number");
   });
 
   it("get_video_document, list_items, job_status, export_markdown, list_namespaces", async () => {

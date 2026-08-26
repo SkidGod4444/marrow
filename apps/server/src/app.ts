@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
+import type { UIMessage } from "ai";
 import {
   SOURCE_TYPES, createIngest, createNamespace, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem,
-  getJobStatus, getNamespace, listEntities, listItems, listNamespaces, lookupEntity, presentDocument,
+  getJobStatus, getNamespace, getNamespaceGraph, listEntities, listItems, listNamespaces, logEvent, lookupEntity, presentDocument, streamVideoChat,
 } from "@marrow/core";
 import { type ServerDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
@@ -49,6 +50,14 @@ export function createApp(deps: AppDeps) {
     const ns = await getNamespace(deps.db, c.req.param("ref"));
     if (!ns) return c.json({ error: "namespace not found" }, 404);
     return c.json({ entities: await listEntities(deps.db, ns.id) });
+  });
+
+  app.get("/namespaces/:ref/graph", async (c) => {
+    try {
+      return c.json(await getNamespaceGraph(deps.db, c.req.param("ref"), { maxEntities: c.req.query("max_entities") ? Number(c.req.query("max_entities")) : undefined }));
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 404);
+    }
   });
 
   app.get("/namespaces/:ref/export.md", async (c) => {
@@ -118,6 +127,27 @@ export function createApp(deps: AppDeps) {
   app.get("/items/:id/export.md", async (c) => {
     const md = await exportItemMarkdown(deps, c.req.param("id"), { transcript: c.req.query("transcript") === "1" });
     return md ? c.text(md, 200, { "content-type": "text/markdown; charset=utf-8" }) : c.json({ error: "document not found" }, 404);
+  });
+
+  // ---- Per-video chat (PRD §6.1) — AI SDK UI-message stream for `useChat` ----
+  app.post("/items/:id/chat", async (c) => {
+    const id = c.req.param("id");
+    const doc = await getDocument(deps.storage, id);
+    if (!doc) return c.json({ error: "document not found" }, 404);
+    const body = await c.req.json<{ messages: UIMessage[]; playback_t?: number | null }>();
+    if (!Array.isArray(body.messages) || !body.messages.length) return c.json({ error: "messages are required" }, 400);
+    await logEvent(deps.db, id, "chatted");
+    return streamVideoChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel }, { doc, messages: body.messages, playbackT: body.playback_t ?? null });
+  });
+
+  // ---- Activity events (PRD §11) ----
+  app.post("/items/:id/events", async (c) => {
+    const item = await getItem(deps.db, c.req.param("id"));
+    if (!item) return c.json({ error: "item not found" }, 404);
+    const { kind } = await c.req.json<{ kind: string }>();
+    if (!["read", "chatted", "skipped", "expression_saved"].includes(kind)) return c.json({ error: "invalid kind" }, 400);
+    await logEvent(deps.db, item.id, kind as "read");
+    return c.json({ ok: true });
   });
 
   // ---- Ingestion ----

@@ -7,7 +7,7 @@ import { realRetrieval } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 
 const config = loadConfig();
-const { db } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
+const { db, close: closeDb } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
 const storage = createStorage(config);
 const providers = createProviders(config);
 const queue = config.DATABASE_URL ? new PgBossQueue(config.DATABASE_URL) : new InProcessQueue();
@@ -16,5 +16,11 @@ await queue.start(async (jobId) => {
 });
 
 const server = createMcpServer({ db, storage, config, queue, ...realRetrieval(config) });
-await server.connect(new StdioServerTransport());
+const transport = new StdioServerTransport();
+transport.onclose = async () => {
+  await queue.stop().catch(() => undefined);
+  await closeDb().catch(() => undefined);
+  process.exit(0);
+};
+await server.connect(transport);
 console.error("marrow mcp (stdio) ready");

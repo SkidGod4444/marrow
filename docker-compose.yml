@@ -54,6 +54,14 @@ services:
       db: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
 
+  web:
+    build: { context: ., dockerfile: docker/web.Dockerfile }
+    environment:
+      MARROW_API_URL: http://server:3001
+      MARROW_API_KEY: ${MARROW_API_KEY:-}
+    ports: ["3000:3000"]
+    depends_on: [server]
+
 volumes:
   pgdata:
   miniodata:

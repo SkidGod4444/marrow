@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai";
 import {
   type Config, type Db, type JobQueue, type Storage, RERANK_SYSTEM, RerankSchema, UsageTracker, embedTexts, generateStructured, search,
   type SearchInput,
@@ -11,6 +12,8 @@ export type ServerDeps = {
   queue: JobQueue;
   embedQuery: (text: string) => Promise<number[]>;
   rerank?: (query: string, candidates: Array<{ id: string; text: string }>) => Promise<string[]>;
+  /** Override the interactive chat model (tests inject `MockLanguageModelV3`). Default: OpenAI LLM_MODEL_CHAT. */
+  chatModel?: LanguageModel;
 };
 
 export function realRetrieval(config: Config): Pick<ServerDeps, "embedQuery" | "rerank"> {

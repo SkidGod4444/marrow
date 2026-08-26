@@ -69,3 +69,27 @@ The HTTP transport mounts at `/mcp` on the same Hono app (behind the API-key mid
 ## 2026-08-27 — `capture` deferred to Phase 5; `export_markdown` shipped in Phase 2
 
 PRD §8 lists `capture` among the tools but §14 places capture + text sources in Phase 5, and it needs the text-source pipeline path. `export_markdown` is cheap and immediately useful to agents, so it ships now. (PRD §7, §8, §14)
+
+## 2026-08-27 — Web app is a separate process but a pure client of the server
+
+Phase 3 adds `apps/web` (Next.js). The owner asked to keep processes minimal; the web UI is still its own process (Next.js needs one), but it holds **no** database, storage, or OpenAI access — server components fetch from the Hono API with the owner key from `MARROW_API_URL`/`MARROW_API_KEY`, and client components go through `app/api/marrow/[...path]`, a transparent proxy that injects the key and streams bodies (chat SSE, frame JPEGs). All chat logic (`services/chat.ts`, `POST /items/:id/chat`) lives in the server process, so PGlite's single-process lock is never contended and LLM/DB code stays in one place. Static export was rejected because dynamic `/items/[id]` routes and SSR of large documents are wanted. (PRD §6.1, §14 Phase 3)
+
+## 2026-08-27 — shadcn `base-nova` + AI Elements (vendored), Streamdown for markdown
+
+`shadcn init -d` (latest CLI) picks the `base-nova` style on `@base-ui/react`; AI Elements components are copied into `components/ai-elements/` by the `ai-elements` CLI and patched locally where they lag base-ui 1.7 types (`prompt-input.tsx` event handler types, HoverCard delays). Article sections and chat answers render through Streamdown (`MessageResponse`) with an `a` component override so `[MM:SS](#t=N)` links seek the player. YouTube embedding uses a ~100-line IFrame-API wrapper (`components/marrow/player.tsx`) instead of a dependency. (PRD §6.2, §14 Phase 3)
+
+## 2026-08-27 — Production compose + Caddy; AWS guide in docs/DEPLOY.md
+
+`docker-compose.prod.yml` runs server + web + Caddy (automatic HTTPS for `MARROW_DOMAIN`) on the EC2 box; RDS and S3 come from `.env`. Caddy routes `/mcp` and `/api/v1/*` (prefix stripped) to the server and everything else to the web app. `docs/DEPLOY.md` is the click-by-click console guide (IAM user + MFA, S3 bucket with multipart-abort lifecycle, RDS db.t4g.micro single-AZ, EC2 t4g.medium + Elastic IP + security groups, registrar A record, instance role for S3). (docs/STACK.md hosting row)
+
+## 2026-08-27 — Knowledge graph is a projection of `mentions`, served by API/MCP and drawn with d3-force
+
+Owner asked for a graph knowledge base with a graph on the web. Adding a graph database for a single-owner corpus would duplicate the entity index the PRD already specifies (§9), so the graph is computed from `entities`/`mentions`/`items`: item ⟷ entity edges with mention count, stance mix and first timestamp. It ships as `GET /namespaces/:ref/graph`, the MCP `get_graph` tool (agents can reason over structure), and a d3-force SVG page (`/namespaces/[name]/graph`) with search, kind filters, zoom/drag, and a node panel whose links deep-link into items at the first mention (`/items/:id?t=`). Entity-kind colours use the validated dataviz categorical slots (checked in light and dark with the palette validator; direct labels are the required relief for the low-contrast slots). (PRD §8, §9, §14 Phase 3)
+
+## 2026-08-27 — Design system: serif reading text, keycap buttons, timeline rail
+
+Owner brief: research-oriented, minimalist, better fonts, 3D/small buttons, "next level". Choices: Source Serif 4 (with optical sizing) for everything read, IBM Plex Sans for chrome, IBM Plex Mono for time and data; one accent (`--time`, a marrow red) reserved for the live playhead/hover; timecodes as small keycaps and every time-indexed list on a shared "rail" with ticks; shadcn `Button` variants patched into tactile keycaps one size smaller. The shadcn init's `--font-sans: var(--font-sans)` self-reference (which silently fell back to a serif system font) is fixed in `globals.css`. (PRD §6.2, §14 Phase 3)
+
+## 2026-08-27 — Close PGlite on shutdown
+
+Killing the server mid-write left PGlite's on-disk data in a state the next start aborted on (WASM `Aborted()` at the first query). The server and stdio entrypoints now stop the queue, close the DB handle, and only then exit; stale `.marrow/pglite` from an unclean kill can be deleted and re-seeded. Real Postgres is unaffected. (docs/STACK.md database row)

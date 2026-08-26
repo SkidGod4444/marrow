@@ -12,7 +12,7 @@ Marrow ingests long-form video (YouTube first; later podcasts via RSS, uploads, 
 
 ## Repo state & build order
 
-Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1 and 2 are done** (verified with fakes; the live OpenAI acceptance run still needs `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
+Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1–3 are done** (verified with fakes/mocks; the live OpenAI acceptance runs still need `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
 
 1. **Phase 1 — Ingestion core.** CLI/endpoint ingests one YouTube URL into a namespace through pipeline stages 1–8. *Accept:* a 1-hr talk yields a valid document JSON with word-level timestamps, ≤120 captioned keyframes, article, references, segments in DB; re-running is idempotent; a failed stage resumes without redoing earlier ones.
 2. **Phase 2 — MCP + REST.** All §8 tools live; Claude Code connects via a config snippet documented in the README. *Accept:* `search` over a 10-video namespace returns timestamped deep-linked segments; `get_frame` returns an image; `lookup_entity` returns cross-video mentions.
@@ -32,6 +32,7 @@ Package manager is **bun** (Turborepo over bun workspaces) — never npm/pnpm. R
 | Lint | `bun run lint` |
 | CLI (runs the pipeline in-process) | `bun run cli ns create <name>` · `bun run cli ingest <url> --ns <name> [--force] [--stages a,b]` · `bun run cli job <job_id>` · `bun run cli doc <item_id>` |
 | Server (REST + MCP over HTTP at `/mcp` + job runner) | `bun run server` · `bun run server:dev` (watch) |
+| Web app (Next.js, needs `apps/web/.env.local` with `MARROW_API_URL`/`MARROW_API_KEY`) | `bun run web` · typecheck: `cd apps/web && bun run typecheck` (runs `next typegen` first) · build: `bun run build` |
 | MCP over stdio (for `claude mcp add marrow -- bun run …/apps/server/src/mcp-stdio.ts`) | `bun run apps/server/src/mcp-stdio.ts` |
 | DB migration after editing `packages/core/src/db/schema.ts` | `bun run db:generate` (then hand-add any `CREATE EXTENSION` lines) · `bun run db:migrate` |
 | Full local stack | `docker compose up --build` (Postgres+pgvector, MinIO, server on :3001) |
@@ -52,8 +53,15 @@ packages/core/src/
   services/            namespaces, ingest (idempotency), jobs, items, events, entities (index upsert + lookup_entity),
                        search (hybrid RRF), context, frames (get_frame), documents (TTL cache + presentDocument), export (markdown)
   queue.ts             JobQueue: pg-boss (real Postgres) or in-process serial fallback
-apps/server/src/       app.ts (Hono REST routes + /mcp mount), mcp.ts (MCP tool registrations), deps.ts (ServerDeps, real embed/rerank),
+  services/chat.ts     per-video chat: static cached system prefix, view_frame/fetch_url/web_search tools, streamText → UI-message stream
+apps/server/src/       app.ts (Hono REST routes + /mcp mount + POST /items/:id/chat), mcp.ts (MCP tool registrations), deps.ts (ServerDeps),
                        index.ts (boot: db + storage + queue + Bun.serve), mcp-stdio.ts (stdio transport entrypoint), cli.ts
+apps/web/              Next.js (App Router): app/page.tsx (library), app/items/[id]/page.tsx (item), app/api/marrow/[...path] (key-injecting proxy),
+                       app/namespaces/[name]/graph (knowledge graph), lib/api.ts (server-only API client), lib/time.ts (client timestamp helpers),
+                       components/marrow/* (player, reader, chat, transcript, item-view, knowledge-graph, timestamp-link = keycaps/rail/eyebrow),
+                       components/ai-elements/* (vendored, patched locally), components/ui/* (shadcn, button.tsx patched into keycaps)
+scripts/seed-demo.ts   dev-only: seed a `demo` namespace through the fake pipeline for UI work without yt-dlp/OpenAI
+docker/                server + web Dockerfiles, Caddyfile; docker-compose.yml (local) and docker-compose.prod.yml (EC2); docs/DEPLOY.md
 docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose.yml at root
 ```
 
@@ -71,7 +79,13 @@ docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose
 
 **One service layer, two skins.** REST and MCP (stdio + HTTP transport) expose the same functions — `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns MCP image content), `lookup_entity`, `list_items`, `ingest`, `job_status`, `capture`, `export_markdown` (full table in PRD §8). Implement each once in the service layer; the REST routes and MCP tool handlers are thin adapters. Auth is one owner API key in a header.
 
-**Chat context is built for prompt caching** (PRD §6.1). Per-video: a static prefix of the full timestamped transcript as `[MM:SS] text` lines + metadata/chapters + the frame list *as text* (timestamps + captions, never images) + references; tools `view_frame(t)` (loads the image on demand), `web_search`, `fetch_url`. Per-namespace: namespace summary + entity index headline, with the §8 retrieval tools. Keep the static prefix first and stable so provider prompt caching hits.
+**Chat context is built for prompt caching** (PRD §6.1). `services/chat.ts` builds a static system prefix — instructions + full `[MM:SS] text` transcript + metadata/chapters + keyframes *as text* + references — and appends anything dynamic (the player position) to the latest user message; `promptCacheKey` is `marrow:{item}:v{version}`. Tools: `view_frame(t)` returns the JPEG to the model via `toModelOutput` (`file-data`) and `frame_id` to the UI, `fetch_url`, and the provider-executed `web_search`. The server streams `toUIMessageStreamResponse()`; the web app's `useChat` posts through the proxy. Per-namespace chat (Phase 4) reuses the same shape with the §8 retrieval tools.
+
+**Design system (owner brief: research platform, minimalist, small tactile buttons).** Type is three roles: `font-serif` (Source Serif 4) for everything read — titles, article, transcript, assistant answers (`.reading` / `.md`); `font-sans` (IBM Plex Sans) for chrome; `font-mono` (IBM Plex Mono) for timecodes, eyebrows, metadata. One accent, `--time` (marrow red), is reserved for the live playhead and hover on timecodes. Timecodes are `.timecode` keycaps (`TimestampButton`, `MarkdownLink`) and every time-indexed list sits on the `Rail`/`RailEntry` timeline (reader sections, transcript, chapters). shadcn `Button` variants are patched into keycaps (1px bottom edge, top highlight, press-down; default size h-7). Entity-kind colours for the graph are the validated dataviz categorical slots in `globals.css` (`--kind-*`), in the order paper, tool, technique, dataset, person, repo — keep that order; it was checked for CVD separation.
+
+**The knowledge graph is a projection, not a store.** `services/graph.ts` aggregates `mentions` into item⟷entity edges (weight, stance mix, first timestamp); `GET /namespaces/:ref/graph` and the MCP `get_graph` tool return it; `components/marrow/knowledge-graph.tsx` lays it out with d3-force (run to rest once, drag re-heats) and renders SVG. Postgres remains the only database.
+
+**The web app never touches the database or OpenAI.** It is a client of the server: server components call `lib/api.ts` (server-only, key from env); client components call `/api/marrow/*`, a transparent proxy that injects the key and streams bodies through. `@marrow/core` is imported for *types only* in `apps/web`. Timestamps in assistant text are turned into `#t=` links by `lib/time.ts#linkifyTimestamps` and intercepted by `MarkdownLink` to call the YouTube IFrame API `seekTo`. AI Elements components under `components/ai-elements/` are vendored (registry copies) — patch them locally when a base-ui bump breaks types, don't reinstall over them.
 
 **Enrichment feeds three cross-item structures** (PRD §9–10): the per-namespace **entity index** (canonical name, aliases, resolved URL, mentions with item/t/quote); **claims** `{entity?, claim_text, stance ∈ supports|opposes|neutral, item, t}` so `lookup_entity` can surface disagreements across videos; and the **namespace summary**, regenerated every 3 ingests and injected into namespace chat and `list_namespaces`. **Novelty triage** retrieves top-matching existing segments per new chapter/section, has an LLM classify each as `known` vs `new` with pointers, and stores the verdict on the document for the inbox card.
 

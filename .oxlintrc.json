@@ -1,10 +1,32 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc"],
-  "categories": { "correctness": "error", "suspicious": "warn" },
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
   "rules": {
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ],
     "unicorn/no-array-sort": "off"
   },
-  "ignorePatterns": ["**/node_modules/**", "**/.next/**", "**/dist/**", "**/.marrow/**", "**/migrations/**", ".turbo/**"]
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/.marrow/**",
+    "**/migrations/**",
+    ".turbo/**",
+    "apps/web/components/ai-elements/**",
+    "apps/web/components/ui/**"
+  ]
 }

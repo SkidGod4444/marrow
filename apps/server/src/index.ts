@@ -4,7 +4,7 @@ import { realRetrieval } from "./deps.ts";
 
 // One process does everything (owner decision): REST API, MCP over HTTP, and the ingestion job runner.
 const config = loadConfig();
-const { db, driver } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
+const { db, driver, close: closeDb } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
 const storage = createStorage(config);
 const providers = createProviders(config);
 
@@ -20,10 +20,15 @@ console.log(
   `marrow server on http://localhost:${server.port} (db: ${driver}, storage: ${config.STORAGE_DRIVER}, queue: ${config.DATABASE_URL ? "pg-boss" : "in-process"}, mcp: /mcp${config.MARROW_API_KEY ? "" : " — WARNING: MARROW_API_KEY unset, API is open"})`,
 );
 
+// Close the DB on the way out: PGlite on disk must be shut down cleanly or the next start can abort in WASM.
+let stopping = false;
 const shutdown = async () => {
+  if (stopping) return;
+  stopping = true;
   console.log("shutting down…");
-  await queue.stop();
   server.stop();
+  await Promise.race([queue.stop(), new Promise((r) => setTimeout(r, 5000))]);
+  await closeDb().catch(() => undefined);
   process.exit(0);
 };
 process.on("SIGINT", shutdown);

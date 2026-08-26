@@ -20,9 +20,11 @@
     "server": "bun run apps/server/src/index.ts",
     "db:generate": "bun run --cwd packages/core db:generate",
     "db:migrate": "bun run packages/core/src/db/migrate.ts",
-    "server:dev": "bun run --watch apps/server/src/index.ts"
+    "server:dev": "bun run --watch apps/server/src/index.ts",
+    "web": "bun run --cwd apps/web dev"
   },
   "devDependencies": {
+    "@marrow/core": "workspace:*",
     "oxlint": "^1.80.0",
     "turbo": "^2.10.12"
   },
