@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  SOURCE_TYPES, createIngest, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
-  getNamespace, getNamespaceGraph, listItems, listNamespaces, lookupEntity, presentDocument,
+  SOURCE_TYPES, addSource, createIngest, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
+  getNamespace, getNamespaceGraph, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument,
 } from "@marrow/core";
 import { type ServerDeps, runSearch } from "./deps.ts";
 
@@ -155,6 +155,60 @@ export function createMcpServer(deps: ServerDeps): McpServer {
         const res = await createIngest(deps.db, { namespace, url, force });
         if (!res.reused || res.job.state !== "done") await deps.queue.enqueue(res.job.id);
         return text({ job_id: res.job.id, item_id: res.item.id, reused: res.reused, state: res.job.state });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "subscribe",
+    {
+      title: "Subscribe to a playlist or channel",
+      description: "Add a YouTube playlist or channel to a namespace. It is polled on a schedule and new uploads are ingested automatically; the first poll runs immediately.",
+      inputSchema: { namespace: z.string(), url: z.string(), title: z.string().optional() },
+    },
+    async ({ namespace, url, title }) => {
+      try {
+        const res = await addSource(deps.db, { namespace, url, title });
+        const poll = await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, res.source);
+        return text({ source: res.source, created: res.created, poll });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_sources",
+    { title: "List subscriptions", description: "Subscribed playlists/channels with last-checked time and last error.", inputSchema: { namespace: z.string().optional() } },
+    async ({ namespace }) => {
+      const ns = namespace ? await getNamespace(deps.db, namespace) : null;
+      if (namespace && !ns) return fail(`namespace "${namespace}" not found`);
+      return text({ sources: await listSources(deps.db, ns?.id) });
+    },
+  );
+
+  server.registerTool(
+    "poll_sources",
+    { title: "Poll subscriptions now", description: "Check every subscription (or one namespace's) for new uploads and queue them.", inputSchema: { namespace: z.string().optional() } },
+    async ({ namespace }) => {
+      const ns = namespace ? await getNamespace(deps.db, namespace) : null;
+      if (namespace && !ns) return fail(`namespace "${namespace}" not found`);
+      return text({ results: await pollAllSources({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, ns?.id) });
+    },
+  );
+
+  server.registerTool(
+    "inbox",
+    { title: "Watch inbox", description: "Ready items you haven't skipped, newest first, each with its summary and novelty verdict; plus items still ingesting.", inputSchema: { namespace: z.string().optional() } },
+    async ({ namespace }) => {
+      try {
+        const r = await listInbox(deps.db, { namespace });
+        return text({
+          entries: r.entries.map((e) => ({ id: e.id, namespace: e.namespace.name, title: e.title, channel: e.channel, duration_s: e.durationS, summary: e.summary, novelty: e.novelty?.verdict ?? null, created_at: e.createdAt })),
+          pending: r.pending.map((e) => ({ id: e.id, namespace: e.namespace.name, title: e.title || e.sourceUrl, status: e.status })),
+        });
       } catch (err) {
         return fail((err as Error).message);
       }

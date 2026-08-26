@@ -36,6 +36,37 @@ export async function download(cfg: Config, url: string, outDir: string): Promis
   return join(outDir, src);
 }
 
+export type PlaylistEntry = { id: string; title: string; url: string };
+export type PlaylistListing = { title: string | null; entries: PlaylistEntry[] };
+
+/** Newest-first listing of a playlist or channel without downloading anything (`--flat-playlist`). */
+export async function listPlaylistEntries(cfg: Config, url: string, opts: { limit?: number } = {}): Promise<PlaylistListing> {
+  const target = channelVideosUrl(url);
+  const limit = opts.limit ?? 100;
+  const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), target]);
+  const j = JSON.parse(stdout) as { title?: string; entries?: Array<{ id?: string; title?: string; url?: string; _type?: string; entries?: unknown[] }> };
+  const entries: PlaylistEntry[] = [];
+  for (const e of j.entries ?? []) {
+    if (!e.id || e._type === "playlist") continue;
+    entries.push({ id: e.id, title: e.title ?? "", url: `https://www.youtube.com/watch?v=${e.id}` });
+  }
+  return { title: j.title ?? null, entries };
+}
+
+/** Channel URLs list tabs; `/videos` lists uploads newest-first, which is what polling wants. */
+export function channelVideosUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^(www|m)\./, "");
+    if (host !== "youtube.com") return url;
+    if (u.searchParams.get("list")) return url;
+    if (/^\/(@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)\/?$/.test(u.pathname)) return `https://www.youtube.com${u.pathname.replace(/\/$/, "")}/videos`;
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 /** Canonical form so (namespace, source_url) idempotency survives playlist/tracking params. */
 export function canonicalizeSourceUrl(url: string): string {
   try {

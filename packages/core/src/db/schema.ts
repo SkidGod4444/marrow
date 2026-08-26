@@ -38,9 +38,12 @@ export const sources = pgTable("sources", {
   namespaceId: text("namespace_id").notNull().references(() => namespaces.id, { onDelete: "cascade" }),
   kind: text("kind").notNull(), // playlist | channel | rss | email
   url: text("url").notNull(),
+  title: text("title"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [uniqueIndex("sources_ns_url_uq").on(t.namespaceId, t.url)]);
+export type Source = typeof sources.$inferSelect;
 
 export const items = pgTable(
   "items",
@@ -54,6 +57,8 @@ export const items = pgTable(
     status: text("status").notNull().default("queued"), // queued | running | failed | ready
     documentKey: text("document_key"),
     novelty: jsonb("novelty").$type<Novelty>(),
+    summary: text("summary"), // article summary, denormalised for the inbox
+    archivedAt: timestamp("archived_at", { withTimezone: true }), // inbox "Skip" (PRD §6.4)
     durationS: real("duration_s"),
     language: text("language"),
     publishedAt: timestamp("published_at", { withTimezone: true }),

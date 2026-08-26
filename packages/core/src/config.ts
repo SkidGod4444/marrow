@@ -43,6 +43,9 @@ export const ConfigSchema = z.object({
   SEARCH_OVERFETCH: z.coerce.number().default(4),
   SEARCH_RERANK: z.enum(["rrf", "llm"]).default("rrf"),
 
+  // Subscriptions (PRD §6.4): poll playlists/channels every N minutes; 0 disables the schedule.
+  POLL_EVERY_MINUTES: z.coerce.number().default(30),
+
   // Server
   PORT: z.coerce.number().default(3001),
   MARROW_API_KEY: z.string().optional(),

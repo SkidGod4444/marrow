@@ -61,3 +61,30 @@ export const ResolvedSchema = z.object({
 });
 
 export const RESOLVE_SYSTEM = `Resolve each reference to its canonical URL using web search. Prefer: arxiv.org/abs/… for papers, the GitHub repository for repos, the official homepage for tools and datasets, a homepage or Wikipedia page for people. Return null when you are not confident the URL is the right thing. Echo each name exactly as given.`;
+
+// ---- PRD §10 novelty triage ----
+
+export const NoveltyLLMSchema = z.object({
+  sections: z.array(
+    z.object({
+      i: z.number().int().describe("Index of the section in the input"),
+      label: z.enum(["known", "new"]),
+      topic: z.string().describe("3–8 word topic of the section"),
+      covered_by: z.array(z.object({ item_id: z.string(), t: z.number().nullable() })).describe("For known sections: which existing items cover it, with the timestamp of the matching passage"),
+    }),
+  ),
+});
+
+export const NOVELTY_SYSTEM = `You triage a newly ingested video against a research corpus. For each section you get the section's heading + excerpt and the closest passages already in the corpus (from other videos).
+
+Label a section "known" only if a matched passage genuinely covers the same idea, result, or argument — not merely the same topic area. Label it "new" if it adds material the corpus doesn't have: a new technique, result, disagreement, worked example, or a substantially deeper treatment. Give each section a short topic. For known sections list the covering items with the matching timestamp. Be strict: the owner uses "new" to decide what to watch.`;
+
+// ---- PRD §9 namespace summary ----
+
+export const NamespaceSummarySchema = z.object({
+  summary: z.string().describe("Markdown, ≤ 250 words: what the corpus covers, recurring themes, notable disagreements between sources (name the videos)."),
+});
+
+export const SUMMARY_SYSTEM = `You write the standing summary of a topic-scoped research corpus built from videos and captured text. Input: the items (title, channel, one-paragraph summary each) and the entity index (papers, tools, people, techniques with mention and stance counts).
+
+Write ≤ 250 words of markdown with three short parts: what the corpus covers; recurring themes; notable disagreements or tensions between sources (cite the video titles). Be specific and dense; no preamble, no bullet-point padding.`;

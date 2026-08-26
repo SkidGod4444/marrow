@@ -8,6 +8,7 @@ import { newId } from "../ids.ts";
 import { UsageTracker } from "../openai/client.ts";
 import type { Storage } from "../storage/index.ts";
 import { invalidateDocument } from "../services/documents.ts";
+import { maybeRefreshNamespaceSummary } from "../services/summary.ts";
 import { nowIso } from "../util.ts";
 import { STAGES } from "./stages/index.ts";
 import type { Providers, StageContext } from "./types.ts";
@@ -132,11 +133,24 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
       channel: doc.channel || item.channel,
       language: doc.language,
       durationS: doc.duration_s,
+      summary: doc.article?.summary ?? null,
       documentKey: documentKey(item.id),
       updatedAt: new Date(),
     })
     .where(eq(items.id, item.id));
   await db.insert(events).values({ id: newId("evt"), itemId: item.id, kind: "ingested" });
+
+  // PRD §9: the namespace summary is regenerated after every 3rd ingest; its cost rides on this job.
+  try {
+    const refreshed = await maybeRefreshNamespaceSummary({ db, generate: (o, usage) => providers.generate(o, usage) }, namespace.id);
+    if (refreshed) {
+      job.costUsd = round6(job.costUsd + refreshed.cost);
+      await saveJob();
+      log(`namespace summary refreshed ($${refreshed.cost.toFixed(4)})`);
+    }
+  } catch (err) {
+    log(`namespace summary failed: ${(err as Error).message}`);
+  }
 
   // Derived artifacts are in storage; the raw download and scratch files are no longer needed.
   await storage.deletePrefix(rawPrefix(item.id)).catch((e) => log(`cleanup raw/: ${String(e)}`));

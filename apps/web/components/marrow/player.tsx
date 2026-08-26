@@ -55,6 +55,11 @@ export function usePlayer(): PlayerApi {
   return ctx;
 }
 
+/** Same as usePlayer but returns null outside a provider (namespace chat has no player). */
+export function usePlayerOptional(): PlayerApi | null {
+  return useContext(PlayerContext);
+}
+
 export function youtubeId(url: string): string | null {
   try {
     const u = new URL(url);

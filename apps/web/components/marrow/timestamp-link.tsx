@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import type { ComponentProps, MouseEvent, ReactNode } from "react";
 import type { Streamdown } from "streamdown";
-import { usePlayer } from "./player";
+import { usePlayer, usePlayerOptional } from "./player";
 import { fmtTs } from "@/lib/time";
 
 /** A timecode. Click → the player seeks there. The one element set in mono + the accent, everywhere. */
@@ -23,22 +24,30 @@ export function TimestampButton({ t, active = false, className = "" }: { t: numb
 
 /** Markdown `<a>` override: `#t=754` links seek the player; everything else opens in a new tab. */
 export function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
-  const { seekTo } = usePlayer();
+  const player = usePlayerOptional();
   const m = href ? /^#t=(\d+(?:\.\d+)?)$/.exec(href) : null;
-  if (m) {
+  if (m && player) {
     const t = Number(m[1]);
     return (
       <a
         href={href}
         onClick={(e: MouseEvent) => {
           e.preventDefault();
-          seekTo(t);
+          player.seekTo(t);
         }}
         className="timecode mx-0.5 align-[-3px] no-underline"
         title={`Jump to ${fmtTs(t)}`}
       >
         {children}
       </a>
+    );
+  }
+  // Namespace chat cites as [Title @ MM:SS](/items/ID?t=S): an internal link that opens the item at that moment.
+  if (href?.startsWith("/items/")) {
+    return (
+      <Link href={href} className="timecode mx-0.5 h-auto whitespace-normal py-0.5 align-[-2px] font-sans normal-case tracking-normal no-underline">
+        {children}
+      </Link>
     );
   }
   return (

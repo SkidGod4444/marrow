@@ -14,7 +14,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | `STACK:vlm_cheap` | **OpenAI `gpt-5.6-luna`** (image input, structured outputs) | Caption + OCR per keyframe, `reasoning.effort: "none"`. |
 | `STACK:llm_cheap` | **OpenAI `gpt-5.6-luna`** ($0.20 / $1.20 per M tokens) | Article, enrichment, novelty, rerank. Structured outputs via zod. |
 | `STACK:embeddings` | **OpenAI `text-embedding-3-small`** (1536 dims, $0.02/M) | `segments.embedding vector(1536)` via pgvector. |
-| `STACK:cron` | **pg-boss `schedule()`** | The server process owns the polling schedule (Phase 4). |
+| `STACK:cron` | **pg-boss `schedule()`** behind `JobQueue.schedule()` (a `setInterval` on PGlite) | The server process polls subscriptions every `POLL_EVERY_MINUTES` (default 30). |
 | `STACK:inbound_email` | **TBD at Phase 5** (Resend inbound or Cloudflare Email Workers → webhook) | Not needed before Phase 5; decide then. |
 | Chat model | **OpenAI `gpt-5.6-terra`** via `@ai-sdk/openai` (Responses API), `reasoningEffort: low`, `promptCacheKey` per item | Interactive only. |
 | `STACK:api` | **Hono** on bun, owner API key header | MCP HTTP transport mounts on the same Hono app; MCP stdio is a second entrypoint of the same package. |

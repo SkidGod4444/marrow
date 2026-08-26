@@ -3,7 +3,7 @@ import { API_URL, apiHeaders } from "@/lib/api";
 // Transparent proxy to the Marrow API for client components (chat stream, frame images, ingest).
 // Attaches the owner API key server-side and streams the upstream body through untouched.
 
-const ALLOW = /^(items\/[^/]+\/(chat|events)|frames\/[^/]+|ingest|namespaces|namespaces\/[^/]+\/graph|jobs\/[^/]+|search)$/;
+const ALLOW = /^(items\/[^/]+\/(chat|events|archive)|frames\/[^/]+|ingest|inbox|namespaces|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {
   const { path } = await ctx.params;

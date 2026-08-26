@@ -1,89 +1,52 @@
 import Link from "next/link";
-import { IngestForm } from "@/components/marrow/ingest-form";
+import { InboxList } from "@/components/marrow/inbox-list";
 import { api } from "@/lib/api";
-import { fmtTs } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-const STATUS: Record<string, { dot: string; label: string }> = {
-  ready: { dot: "bg-foreground", label: "ready" },
-  running: { dot: "bg-time animate-pulse", label: "ingesting" },
-  queued: { dot: "bg-muted-foreground/40", label: "queued" },
-  failed: { dot: "bg-destructive", label: "failed" },
-};
-
-export default async function LibraryPage() {
-  const namespaces = await api.namespaces();
-  const itemsByNs = await Promise.all(namespaces.map((ns) => api.items(ns.name)));
-  const total = itemsByNs.flat().length;
+/** PRD §6.4: the watch inbox is the landing page — what came in, what's new about it, read / chat / skip. */
+export default async function InboxPage({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const ns = typeof sp.ns === "string" && sp.ns ? sp.ns : undefined;
+  const [namespaces, inbox] = await Promise.all([api.namespaces(), api.inbox(ns).catch(() => ({ entries: [], pending: [] }))]);
 
   return (
-    <div className="space-y-12">
-      <div className="flex flex-wrap items-end justify-between gap-6">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="reading text-[28px] font-semibold tracking-tight">Library</h1>
+          <h1 className="reading text-[28px] font-semibold tracking-tight">Inbox</h1>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
-            {namespaces.length} namespace{namespaces.length === 1 ? "" : "s"} · {total} item{total === 1 ? "" : "s"}
+            {inbox.entries.length} to watch{inbox.pending.length ? ` · ${inbox.pending.length} ingesting` : ""}
           </p>
         </div>
-        <IngestForm namespaces={namespaces.map((n) => n.name)} />
+        {namespaces.length > 1 && (
+          <nav className="flex flex-wrap items-center gap-1.5 text-[13px]" aria-label="Namespace filter">
+            <Link href="/" className={`rounded-md border px-2 py-0.5 ${!ns ? "border-border bg-muted/60 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              all
+            </Link>
+            {namespaces.map((n) => (
+              <Link key={n.id} href={`/?ns=${encodeURIComponent(n.name)}`} className={`rounded-md border px-2 py-0.5 font-mono text-xs ${ns === n.name ? "border-border bg-muted/60 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                {n.name}
+              </Link>
+            ))}
+          </nav>
+        )}
       </div>
 
-      {namespaces.length === 0 && (
+      {namespaces.length === 0 ? (
         <div className="rounded-lg border border-dashed px-6 py-14 text-center">
           <p className="text-sm font-medium">Nothing here yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Type a namespace name and paste a YouTube link above to ingest your first video.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ingest a video or follow a playlist from the{" "}
+            <Link href="/library" className="underline underline-offset-[3px]">
+              library
+            </Link>
+            . New items land here with a summary and what&apos;s new about them.
+          </p>
         </div>
+      ) : (
+        <InboxList entries={inbox.entries} pending={inbox.pending} showNamespace={!ns} />
       )}
-
-      {namespaces.map((ns, i) => {
-        const items = itemsByNs[i]!;
-        return (
-          <section key={ns.id} className="space-y-4">
-            <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h2 className="font-mono text-[13px] font-medium tracking-tight">{ns.name}</h2>
-              <span className="font-mono text-xs text-muted-foreground">
-                {ns.readyCount}/{ns.itemCount} ready
-              </span>
-              {ns.description && <span className="text-sm text-muted-foreground">{ns.description}</span>}
-              {ns.readyCount > 0 && (
-                <Link href={`/namespaces/${encodeURIComponent(ns.name)}/graph`} className="ml-auto text-[13px] text-muted-foreground underline-offset-[3px] hover:text-foreground hover:underline">
-                  Graph →
-                </Link>
-              )}
-            </header>
-            {ns.summary && <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{ns.summary}</p>}
-            {items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No items yet.</p>
-            ) : (
-              <ul className="divide-y divide-border/70 border-y border-border/70">
-                {items.map((item) => {
-                  const st = STATUS[item.status] ?? STATUS.queued!;
-                  const row = (
-                    <>
-                      <span className={`size-1.5 shrink-0 rounded-full ${st.dot}`} aria-hidden />
-                      <span className="reading min-w-0 flex-1 truncate text-[16px]">{item.title || item.sourceUrl}</span>
-                      <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground sm:block">{item.channel}</span>
-                      <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.status === "ready" && item.durationS ? fmtTs(item.durationS) : st.label}</span>
-                    </>
-                  );
-                  return (
-                    <li key={item.id}>
-                      {item.status === "ready" ? (
-                        <Link href={`/items/${item.id}`} className="-mx-2 flex items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-muted/50">
-                          {row}
-                        </Link>
-                      ) : (
-                        <div className="-mx-2 flex items-center gap-4 px-2 py-3 text-muted-foreground">{row}</div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        );
-      })}
     </div>
   );
 }

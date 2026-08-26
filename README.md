@@ -9,7 +9,8 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 - **Phase 1 — Ingestion core** ✅ `ingest <youtube-url>` runs pipeline stages 1–8 end to end.
 - **Phase 2 — MCP + REST** ✅ every PRD §8 tool over MCP (stdio + Streamable HTTP) and REST, hybrid search with RRF.
 - **Phase 3 — Web app** ✅ library → item page with Reader / Chat / Transcript, YouTube player that seeks on `[MM:SS]` citations, per-video chat (AI Elements + Vercel AI SDK) with `view_frame` / `web_search` / `fetch_url`, "What's on screen now", and a **knowledge graph** per namespace (`/namespaces/<name>/graph`, also `get_graph` over MCP/REST).
-- Phases 4–6 (subscriptions/inbox/novelty, capture, language mode) follow.
+- **Phase 4 — Namespaces at scale** ✅ playlist/channel subscriptions polled on a schedule, the watch inbox as the landing page (Read / Chat / Skip), novelty triage from the 6th item, namespace summaries every 3 ingests, namespace-level chat with the retrieval tools.
+- Phases 5–6 (capture + text sources, language mode) follow.
 
 ## Quick start (local, no Docker)
 
@@ -34,7 +35,7 @@ cp apps/web/.env.example apps/web/.env.local   # MARROW_API_URL + MARROW_API_KEY
 bun run web                    # Next.js on :3000
 ```
 
-`/` is the library (namespaces, items, an ingest form); `/items/<id>` is the item page: sticky YouTube player + **Reader** (summary, takeaways, sections with timestamp margin links, "Ask about this" → chat), **Chat** (cites `[MM:SS]`; clicking seeks the player; "What's on screen now" sends the playback position so the model calls `view_frame`), **Transcript** (follows the playhead). The browser never sees the API key — client calls go through `app/api/marrow/[...path]` which injects it.
+`/` is the **inbox** (PRD §6.4): every ready video you haven't skipped, newest first, with its summary and — once a namespace has more than five items — a novelty verdict ("34% new" + the new spans as timecodes). Read / Chat open the item; Skip archives it (undo in the toast). `/library` lists namespaces with their corpus summary, what they **follow** (playlists/channels, polled every `POLL_EVERY_MINUTES`, "check now" per source), an ingest form, and links to each namespace's **chat** and **graph**. `/namespaces/<name>/chat` is the cross-video research chat: it searches the corpus with the §8 tools and cites `[Title @ MM:SS](/items/…?t=…)` links that open the item at that moment. `/items/<id>` is the item page: sticky YouTube player + **Reader** (summary, takeaways, sections with timestamp margin links, "Ask about this" → chat), **Chat** (cites `[MM:SS]`; clicking seeks the player; "What's on screen now" sends the playback position so the model calls `view_frame`), **Transcript** (follows the playhead). The browser never sees the API key — client calls go through `app/api/marrow/[...path]` which injects it.
 
 **Knowledge graph** — `/namespaces/<name>/graph` draws the namespace as item nodes (videos) and entity nodes (papers, tools, techniques, people, repos, datasets) joined by mention edges weighted by count; dashed edges carry an opposing claim. Click a node for its connections with first-mention timecodes (deep-linking into the item at that moment); search, per-kind filters, zoom, drag. Same data as the MCP `get_graph` tool.
 
@@ -91,6 +92,9 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 | `GET /jobs/:id` | `job_status` |
 | `GET /items/:id/export.md?transcript=1` · `GET /namespaces/:ref/export.md` | `export_markdown` |
 | `GET /namespaces/:ref/graph?max_entities=150` | `get_graph` |
+| `GET /inbox?namespace=&archived=1` · `POST /items/:id/archive {archived?}` | `inbox` |
+| `GET /sources?namespace=` · `POST /sources {namespace,url,kind?,poll?}` · `DELETE /sources/:id` · `POST /sources/:id/poll` · `POST /namespaces/:ref/poll` | `subscribe`, `list_sources`, `poll_sources` |
+| `POST /namespaces/:ref/summary` · `POST /namespaces/:ref/chat` (AI SDK stream) | — |
 | `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` | — (web app) |
 
 All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) when `MARROW_API_KEY` is set.

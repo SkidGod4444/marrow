@@ -19,6 +19,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
   const sp = await searchParams;
   const tParam = Array.isArray(sp.t) ? sp.t[0] : sp.t;
   const initialT = tParam && /^\d+(\.\d+)?$/.test(tParam) ? Number(tParam) : null;
+  const tab = sp.tab === "chat" || sp.tab === "transcript" ? sp.tab : "reader";
   const item = await api.item(id).catch(() => null);
   if (!item) notFound();
   if (item.status !== "ready") {
@@ -40,7 +41,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <h1 className="reading max-w-4xl text-[30px] font-semibold leading-[1.15] tracking-[-0.01em]">{doc.title}</h1>
+        <h1 className="reading max-w-4xl text-[24px] font-semibold leading-[1.15] tracking-[-0.01em] sm:text-[30px]">{doc.title}</h1>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
           {doc.channel && <span>{doc.channel}</span>}
           {doc.published_at && <span>{doc.published_at.slice(0, 10)}</span>}
@@ -56,7 +57,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
           </Link>
         </p>
       </header>
-      <ItemView doc={doc} initialT={initialT} />
+      <ItemView doc={doc} initialT={initialT} initialTab={tab} />
     </div>
   );
 }

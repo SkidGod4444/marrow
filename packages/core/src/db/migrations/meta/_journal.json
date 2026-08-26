@@ -15,6 +15,13 @@
       "when": 1787776229071,
       "tag": "0001_frames",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787779407488,
+      "tag": "0002_inbox_sources",
+      "breakpoints": true
     }
   ]
 }

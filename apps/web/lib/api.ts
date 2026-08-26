@@ -1,5 +1,5 @@
 import "server-only";
-import type { Item, NamespaceGraph, NamespaceSummary, VideoDocument } from "@marrow/core";
+import type { InboxEntry, Item, NamespaceGraph, NamespaceSummary, Source, VideoDocument } from "@marrow/core";
 
 // Server-side client for the Marrow API. The API key never reaches the browser; client components go through
 // the proxy at app/api/marrow/[...path]/route.ts instead.
@@ -25,5 +25,8 @@ export const api = {
   item: (id: string) => apiFetch<{ item: Item }>(`/items/${id}`).then((r) => r.item),
   document: (id: string) => apiFetch<PresentedDocument>(`/items/${id}/document?transcript=full`),
   graph: (namespace: string) => apiFetch<NamespaceGraph>(`/namespaces/${encodeURIComponent(namespace)}/graph`),
+  namespace: (ref: string) => apiFetch<{ namespaces: NamespaceSummary[] }>("/namespaces").then((r) => r.namespaces.find((n) => n.name === ref || n.id === ref) ?? null),
+  inbox: (namespace?: string) => apiFetch<{ entries: InboxEntry[]; pending: InboxEntry[] }>(`/inbox${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`),
+  sources: (namespace?: string) => apiFetch<{ sources: Source[] }>(`/sources${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`).then((r) => r.sources),
   event: (id: string, kind: "read" | "skipped") => apiFetch<{ ok: true }>(`/items/${id}/events`, { method: "POST", body: JSON.stringify({ kind }) }).catch(() => undefined),
 };

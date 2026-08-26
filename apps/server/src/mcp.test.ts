@@ -40,7 +40,7 @@ describe("MCP server (Phase 2 acceptance)", () => {
 
   it("exposes every PRD §8 tool", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["export_markdown", "get_context", "get_frame", "get_graph", "get_video_document", "ingest", "job_status", "list_items", "list_namespaces", "lookup_entity", "search"]);
+    expect(names).toEqual(["export_markdown", "get_context", "get_frame", "get_graph", "get_video_document", "inbox", "ingest", "job_status", "list_items", "list_namespaces", "list_sources", "lookup_entity", "poll_sources", "search", "subscribe"]);
   });
 
   it("search over a 10-video namespace returns timestamped, deep-linked segments", async () => {

@@ -93,3 +93,15 @@ Owner brief: research-oriented, minimalist, better fonts, 3D/small buttons, "nex
 ## 2026-08-27 — Close PGlite on shutdown
 
 Killing the server mid-write left PGlite's on-disk data in a state the next start aborted on (WASM `Aborted()` at the first query). The server and stdio entrypoints now stop the queue, close the DB handle, and only then exit; stale `.marrow/pglite` from an unclean kill can be deleted and re-seeded. Real Postgres is unaffected. (docs/STACK.md database row)
+
+## 2026-08-27 — Phase 4 shape: polling via `JobQueue.schedule`, inbox as `archived_at`, novelty per article section
+
+Subscriptions live in the PRD's `sources` table (plus `title`/`last_error`); polling lists a playlist/channel with `yt-dlp --flat-playlist` (channels are listed via their `/videos` tab, newest first, capped at 100) and ingests only URLs the namespace doesn't already have. The schedule is a method on the queue so Postgres gets pg-boss cron and PGlite gets a timer — same server code. The inbox is simply ready items without `archived_at`; "Skip" is an archive + `skipped` event, undoable. Novelty triage (§10) uses article sections as the unit (chapters, then the whole item, as fallbacks), the nearest existing segments (excluding the item) as evidence, and a cheap-LLM known/new label; the verdict string follows the PRD's example. The namespace summary regenerates on every 3rd ready item and its cost is added to the triggering job. `items.summary` is denormalised so the inbox never loads documents. (PRD §6.4, §9, §10, §11, §14 Phase 4)
+
+## 2026-08-27 — Namespace chat cites internal links
+
+The PRD asks namespace chat to cite `title @ MM:SS` with deep links. The model is instructed to write `[Title @ MM:SS](/items/ITEM_ID?t=SECONDS)` from the tool results; the web renders those as client-side links and the item page seeks to `t` on load. YouTube deep links stay available in the tool results (`deep_link`) for agents over MCP. (PRD §6.1, §14 Phase 4)
+
+## 2026-08-27 — UI conventions: cursor-pointer everywhere, responsive by default, shadcn first
+
+Owner asks: all clickables show a pointer (Tailwind v4 preflight had removed it — restored globally, `not-allowed` when disabled), the platform must be responsive with proper spacing, and shadcn/ui components should be used and customised rather than replaced. Checked at 390px width. (owner brief 2026-08-27)

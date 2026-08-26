@@ -138,3 +138,120 @@ export function htmlToText(html: string): string {
     .replace(/\n{2,}/g, "\n\n")
     .trim();
 }
+
+// ---- PRD §6.1 per-namespace chat: summary + entity headline as context, the §8 retrieval tools as tools ----
+
+import { desc as _desc, eq as _eq, count as _count } from "drizzle-orm";
+import { type Namespace, entities as _entities, items as _items, mentions as _mentions } from "../db/index.ts";
+import { getContext } from "./context.ts";
+import { getDocument, presentDocument } from "./documents.ts";
+import { lookupEntity } from "./entities.ts";
+import { getFrame } from "./frames.ts";
+import { search, type SearchDeps } from "./search.ts";
+
+export type NamespaceChatDeps = ChatDeps & Pick<SearchDeps, "embedQuery" | "rerank">;
+
+export async function buildNamespaceChatSystem(db: Db, ns: Namespace): Promise<string> {
+  const ready = await db.select({ id: _items.id, title: _items.title, channel: _items.channel }).from(_items).where(_eq(_items.namespaceId, ns.id)).orderBy(_desc(_items.createdAt)).limit(80);
+  const ents = await db
+    .select({ name: _entities.name, kind: _entities.kind, n: _count(_mentions.id) })
+    .from(_entities)
+    .leftJoin(_mentions, _eq(_mentions.entityId, _entities.id))
+    .where(_eq(_entities.namespaceId, ns.id))
+    .groupBy(_entities.id)
+    .orderBy(_desc(_count(_mentions.id)))
+    .limit(30);
+  return [
+    `You are Marrow, a research assistant for the namespace "${ns.name}"${ns.description ? ` — ${ns.description}` : ""}: a corpus of videos and captured text. You answer by RETRIEVING from it, never from memory alone.
+
+Rules:
+- Always call search first (several focused queries beat one broad one); use get_context to read around a hit before relying on it; use get_video for an item's article/references; use view_frame to look at a slide or chart; use lookup_entity for everything the corpus says about a paper/tool/person.
+- Cite every claim as a markdown link in exactly this form: [Title @ MM:SS](/items/ITEM_ID?t=SECONDS), using item_id, t_start and the timestamp from the tool results. Cross-video questions must cite at least two different videos when the corpus has them.
+- Say plainly when the corpus does not cover something. Use markdown; be concrete and concise.`,
+    ns.summary ? `CORPUS SUMMARY:\n${ns.summary}` : "CORPUS SUMMARY: (not generated yet — rely on search)",
+    ents.length ? `ENTITY INDEX (top by mentions):\n${ents.map((e) => `- ${e.name} (${e.kind}, ${Number(e.n)} mentions)`).join("\n")}` : "",
+    ready.length ? `ITEMS:\n${ready.map((i) => `- ${i.id} — ${i.title}${i.channel ? ` (${i.channel})` : ""}`).join("\n")}` : "ITEMS: none yet",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function namespaceChatTools(deps: NamespaceChatDeps, ns: Namespace) {
+  const { db, storage, config } = deps;
+  const searchDeps: SearchDeps = { db, config, embedQuery: deps.embedQuery, rerank: deps.rerank };
+  return {
+    search: tool({
+      description: "Hybrid search over the namespace. Returns segments with item_id, title, t_start, a timestamp, an internal link to cite, the text, and on-screen captions.",
+      inputSchema: z.object({ query: z.string(), k: z.number().int().min(1).max(20).default(8), source_type: z.string().optional() }),
+      execute: async ({ query, k, source_type }) => {
+        const r = await search(searchDeps, { namespace: ns.id, query, k, sourceType: source_type });
+        return r.hits.map((h) => ({
+          segment_id: h.segment_id,
+          item_id: h.item_id,
+          title: h.title,
+          t_start: h.t_start,
+          timestamp: h.t_start === null ? null : fmtTs(h.t_start),
+          link: `/items/${h.item_id}${h.t_start === null ? "" : `?t=${Math.floor(h.t_start)}`}`,
+          text: h.text,
+          frame_captions: h.frame_captions,
+        }));
+      },
+    }),
+    get_context: tool({
+      description: "Transcript around a segment (±window_s seconds) so you can read the full argument.",
+      inputSchema: z.object({ segment_id: z.string(), window_s: z.number().min(0).max(1800).default(120) }),
+      execute: async ({ segment_id, window_s }) => (await getContext({ db, storage }, segment_id, window_s)) ?? { error: "segment not found" },
+    }),
+    get_video: tool({
+      description: "An item's article (summary, takeaways, sections), chapters, references and claims — no transcript.",
+      inputSchema: z.object({ video_id: z.string() }),
+      execute: async ({ video_id }) => {
+        const doc = await getDocument(storage, video_id);
+        if (!doc) return { error: "no document" };
+        const p = presentDocument(doc, { transcript: "none" });
+        return { ...p, frames: undefined, frame_count: doc.frames.length };
+      },
+    }),
+    view_frame: tool({
+      description: "Load the keyframe image for a segment id (seg_…) or frame id (frm_…) to see what was on screen.",
+      inputSchema: z.object({ id: z.string() }),
+      execute: async ({ id }): Promise<ViewFrameOutput> => {
+        const f = await getFrame({ db, storage }, id);
+        if (!f) return { error: `no frame for ${id}` };
+        return { frame_id: f.frame.id, t: f.frame.t, timestamp: fmtTs(f.frame.t), caption: f.frame.caption, ocr_text: f.frame.ocrText, image_base64: Buffer.from(f.data).toString("base64") };
+      },
+      toModelOutput: ({ output }) => viewFrameModelOutput(output),
+    }),
+    lookup_entity: tool({
+      description: "Everything the corpus says about a paper, tool, repo, person or technique: mentions with timestamps and claims grouped by stance.",
+      inputSchema: z.object({ name: z.string() }),
+      execute: async ({ name }) => {
+        const r = await lookupEntity(db, { namespace: ns.id, name });
+        if (!r.result) return { found: false, suggestions: r.suggestions };
+        const { entity, mentions, stances, items } = r.result;
+        return {
+          found: true,
+          entity: { name: entity.name, kind: entity.kind, url: entity.url, aliases: entity.aliases },
+          items,
+          stances,
+          mentions: mentions.slice(0, 40).map((m) => ({ item_id: m.item_id, title: m.title, t: m.t, timestamp: m.t === null ? null : fmtTs(m.t), link: `/items/${m.item_id}${m.t === null ? "" : `?t=${Math.floor(m.t)}`}`, quote: m.quote, claim: m.claim_text, stance: m.stance })),
+        };
+      },
+    }),
+  };
+}
+
+export async function streamNamespaceChat(deps: NamespaceChatDeps, input: { namespace: Namespace; messages: UIMessage[] }): Promise<Response> {
+  const { config } = deps;
+  const model = deps.model ?? createOpenAI({ apiKey: config.OPENAI_API_KEY })(config.LLM_MODEL_CHAT);
+  const tools = namespaceChatTools(deps, input.namespace);
+  const result = streamText({
+    model,
+    system: await buildNamespaceChatSystem(deps.db, input.namespace),
+    messages: await convertToModelMessages(input.messages, { tools }),
+    tools,
+    stopWhen: stepCountIs(10),
+    providerOptions: { openai: { reasoningEffort: "low", textVerbosity: "medium", promptCacheKey: `marrow:ns:${input.namespace.id}` } },
+  });
+  return result.toUIMessageStreamResponse();
+}

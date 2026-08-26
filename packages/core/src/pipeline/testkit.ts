@@ -10,10 +10,21 @@ import type { Providers } from "./types.ts";
 
 export async function testEnv() {
   const root = await mkdtemp(join(tmpdir(), "marrow-test-"));
-  const config = loadConfig({ LOCAL_STORAGE_DIR: join(root, "storage"), WORK_DIR: join(root, "work"), OPENAI_API_KEY: "test" });
+  const config = loadConfig({ LOCAL_STORAGE_DIR: join(root, "storage"), WORK_DIR: join(root, "work"), OPENAI_API_KEY: "test", POLL_EVERY_MINUTES: "0" });
   const handle = await createDb({ memory: true });
   const storage = new LocalStorage(config.LOCAL_STORAGE_DIR);
-  return { root, config, db: handle.db, storage, close: handle.close };
+  const providers = fakeProviders();
+  return {
+    root,
+    config,
+    db: handle.db,
+    storage,
+    close: handle.close,
+    // Server-side fakes (no yt-dlp / OpenAI): query embeddings, playlist listings, structured generation.
+    embedQuery: async (q: string) => fakeEmbedding(q),
+    listEntries: fakeListing,
+    generate: providers.generate,
+  };
 }
 
 const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
@@ -149,6 +160,21 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
           ],
         } as never;
       }
+      if (o.schemaName === "novelty") {
+        const input = JSON.parse(o.user as string) as { sections: Array<{ i: number; heading: string; matches: Array<{ item_id: string; t: number | null }> }> };
+        return {
+          sections: input.sections.map((s, idx) => ({
+            i: s.i,
+            label: idx === 0 && s.matches.length ? "known" : "new",
+            topic: s.heading.toLowerCase(),
+            covered_by: idx === 0 ? s.matches.slice(0, 2).map((m) => ({ item_id: m.item_id, t: m.t })) : [],
+          })),
+        } as never;
+      }
+      if (o.schemaName === "namespace_summary") {
+        const input = JSON.parse(o.user as string) as { items: Array<{ title: string }>; entities: Array<{ name: string }> };
+        return { summary: `Corpus of ${input.items.length} items covering ${input.items.map((i) => i.title).slice(0, 3).join(", ")}. Recurring: ${input.entities.map((e) => e.name).join(", ")}. Disagreements: none recorded.` } as never;
+      }
       if (o.schemaName === "resolutions") {
         return { resolutions: [{ name: "Tobin et al. 2017", resolved_url: "https://arxiv.org/abs/1703.06907" }, { name: "Domain randomization", resolved_url: null }] } as never;
       }
@@ -159,5 +185,14 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       usage.add("text-embedding-3-small", { input_tokens: texts.length * 300, requests: 1 });
       return texts.map((t) => fakeEmbedding(t));
     },
+  };
+}
+
+/** Fake playlist/channel listing for polling tests: three deterministic entries derived from the URL. */
+export async function fakeListing(url: string): Promise<{ title: string | null; entries: Array<{ id: string; title: string; url: string }> }> {
+  const key = url.replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(-24);
+  return {
+    title: `Playlist ${key}`,
+    entries: [1, 2, 3].map((n) => ({ id: `${key}-v${n}`, title: `Video ${n} of ${key}`, url: `https://www.youtube.com/watch?v=${key}-v${n}` })),
   };
 }

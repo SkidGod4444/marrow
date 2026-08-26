@@ -23,7 +23,7 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
   const chapterAt = (i: number) => doc.chapters.find((c) => c.t_start <= entries[i]!.t_start && (i === 0 || entries[i - 1]!.t_start < c.t_start));
 
   return (
-    <div className="max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
+    <div className="max-h-[70vh] overflow-y-auto pr-2 lg:max-h-[calc(100vh-12rem)]">
       <Rail>
         {entries.map((e, i) => {
           const chapter = chapterAt(i);

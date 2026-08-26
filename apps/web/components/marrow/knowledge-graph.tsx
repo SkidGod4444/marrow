@@ -80,19 +80,41 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
     zoomRef.current = z;
   }, []);
 
-  const fit = useCallback(() => {
+  // Fit the graph into the canvas minus the overlaid controls (search/zoom on top, legend at the bottom).
+  const fit = useCallback((animate = true) => {
     const svg = svgRef.current;
     if (!svg || !nodes.length || !zoomRef.current) return;
     const xs = nodes.map((n) => n.x);
     const ys = nodes.map((n) => n.y);
-    const [x0, x1, y0, y1] = [Math.min(...xs) - 40, Math.max(...xs) + 40, Math.min(...ys) - 40, Math.max(...ys) + 40];
+    const [x0, x1, y0, y1] = [Math.min(...xs) - 60, Math.max(...xs) + 120, Math.min(...ys) - 30, Math.max(...ys) + 30];
     const { width, height } = svg.getBoundingClientRect();
-    const k = Math.min(1.05, 0.9 / Math.max((x1 - x0) / width, (y1 - y0) / height));
-    const t = zoomIdentity.translate(width / 2 - (k * (x0 + x1)) / 2, height / 2 - (k * (y0 + y1)) / 2).scale(k);
-    select(svg).transition().duration(300).call(zoomRef.current.transform, t);
+    if (!width || !height) return;
+    const top = 56;
+    const bottom = 64;
+    const usable = Math.max(120, height - top - bottom);
+    const k = Math.min(1.05, 0.92 / Math.max((x1 - x0) / width, (y1 - y0) / usable));
+    const t = zoomIdentity.translate(width / 2 - (k * (x0 + x1)) / 2, top + usable / 2 - (k * (y0 + y1)) / 2).scale(k);
+    const sel = select(svg);
+    if (animate) sel.transition().duration(300).call(zoomRef.current.transform, t);
+    else sel.call(zoomRef.current.transform, t);
   }, [nodes]);
   useEffect(() => {
-    fit();
+    fit(false);
+  }, [fit]);
+  useEffect(() => {
+    // Re-fit when the canvas changes size (responsive layouts, rotated phones, embedded views).
+    const svg = svgRef.current;
+    if (!svg || typeof ResizeObserver === "undefined") return;
+    let last = 0;
+    const ro = new ResizeObserver(() => {
+      const w = svg.getBoundingClientRect().width;
+      if (Math.abs(w - last) > 4) {
+        last = w;
+        fit(false);
+      }
+    });
+    ro.observe(svg);
+    return () => ro.disconnect();
   }, [fit]);
   const zoomBy = (f: number) => svgRef.current && zoomRef.current && select(svgRef.current).transition().duration(150).call(zoomRef.current.scaleBy, f);
 
@@ -157,7 +179,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
 
   return (
     <div ref={wrapRef} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="relative h-[calc(100vh-13rem)] min-h-[480px] overflow-hidden rounded-lg border border-border/70 bg-card">
+      <div className="relative h-[60vh] min-h-[420px] overflow-hidden rounded-lg border border-border/70 bg-card lg:h-[calc(100vh-13rem)]">
         <svg ref={svgRef} className="size-full touch-none select-none" onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onClick={() => setSelected(null)}>
           <g transform={transform.toString()}>
             {links.map((l) => {
@@ -240,7 +262,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
           <Button variant="outline" size="icon-sm" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.4)}>
             <Minus />
           </Button>
-          <Button variant="outline" size="icon-sm" aria-label="Fit to view" onClick={fit}>
+          <Button variant="outline" size="icon-sm" aria-label="Fit to view" onClick={() => fit()}>
             <Scan />
           </Button>
         </div>
@@ -268,7 +290,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
         </div>
       </div>
 
-      <aside className="min-w-0 space-y-4 lg:h-[calc(100vh-13rem)] lg:overflow-y-auto">
+      <aside className="min-w-0 space-y-4 lg:h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pr-1">
         {selectedNode ? (
           <NodePanel node={selectedNode} links={links} onSelect={setSelected} />
         ) : (
@@ -316,13 +338,13 @@ function NodePanel({ node, links, onSelect }: { node: SimNode; links: SimLink[];
         )}
         <div className="flex flex-wrap gap-2 pt-1">
           {node.type === "item" && (
-            <Button variant="outline" size="sm" render={<Link href={`/items/${node.id}`} />}>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${node.id}`} />}>
               Open
               <ArrowUpRight />
             </Button>
           )}
           {node.type === "entity" && node.url && (
-            <Button variant="outline" size="sm" render={<a href={node.url} target="_blank" rel="noreferrer" />}>
+            <Button variant="outline" size="sm" nativeButton={false} render={<a href={node.url} target="_blank" rel="noreferrer" />}>
               Source
               <ArrowUpRight />
             </Button>

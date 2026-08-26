@@ -123,3 +123,22 @@ export async function search(deps: SearchDeps, input: SearchInput): Promise<{ na
 
 export const RerankSchema = z.object({ ordered_ids: z.array(z.string()) });
 export const RERANK_SYSTEM = `You rerank retrieved passages for a research question. Return every candidate id, best first, judging how directly each passage answers or supports the query. Exact matches of paper/tool/repo names count strongly.`;
+
+/** Nearest segments to a query vector inside a namespace, optionally excluding one item (used by novelty triage). */
+export async function nearestSegments(
+  db: Db,
+  namespaceId: string,
+  vector: number[],
+  opts: { excludeItemId?: string; k?: number } = {},
+): Promise<Array<{ segment_id: string; item_id: string; title: string; t_start: number | null; text: string; distance: number }>> {
+  const k = opts.k ?? 5;
+  const scope = opts.excludeItemId ? and(eq(segments.namespaceId, namespaceId), sql`${segments.itemId} <> ${opts.excludeItemId}`) : eq(segments.namespaceId, namespaceId);
+  const rows = await db
+    .select({ id: segments.id, itemId: segments.itemId, title: items.title, tStart: segments.tStart, text: segments.text, dist: cosineDistance(segments.embedding, vector) })
+    .from(segments)
+    .innerJoin(items, eq(items.id, segments.itemId))
+    .where(and(scope, sql`${segments.embedding} IS NOT NULL`, eq(items.status, "ready")))
+    .orderBy(cosineDistance(segments.embedding, vector))
+    .limit(k);
+  return rows.map((r) => ({ segment_id: r.id, item_id: r.itemId, title: r.title, t_start: r.tStart, text: r.text, distance: Number(r.dist) }));
+}

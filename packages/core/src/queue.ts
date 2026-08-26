@@ -8,6 +8,8 @@ export type JobHandler = (jobId: string) => Promise<void>;
 export interface JobQueue {
   start(handler: JobHandler): Promise<void>;
   enqueue(jobId: string): Promise<void>;
+  /** STACK:cron — run `fn` every `everyMinutes` (pg-boss cron on Postgres, a timer in-process). */
+  schedule(name: string, everyMinutes: number, fn: () => Promise<void>): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -27,6 +29,15 @@ export class PgBossQueue implements JobQueue {
   async enqueue(jobId: string) {
     await this.boss.send(INGEST_QUEUE, { jobId }, { singletonKey: jobId, retryLimit: 2, retryDelay: 30, expireInSeconds: 4 * 3600 });
   }
+  async schedule(name: string, everyMinutes: number, fn: () => Promise<void>) {
+    const m = Math.max(1, Math.min(59, Math.round(everyMinutes)));
+    const cron = everyMinutes >= 60 ? `0 */${Math.max(1, Math.round(everyMinutes / 60))} * * *` : `*/${m} * * * *`;
+    await this.boss.createQueue(name);
+    await this.boss.work(name, { batchSize: 1 }, async () => {
+      await fn();
+    });
+    await this.boss.schedule(name, cron);
+  }
   async stop() {
     await this.boss.stop({ graceful: true });
   }
@@ -36,6 +47,7 @@ export class InProcessQueue implements JobQueue {
   private handler: JobHandler | null = null;
   private chain: Promise<void> = Promise.resolve();
   private pending = new Set<string>();
+  private timers: ReturnType<typeof setInterval>[] = [];
   async start(handler: JobHandler) {
     this.handler = handler;
   }
@@ -49,7 +61,12 @@ export class InProcessQueue implements JobQueue {
       .catch((err) => console.error(`[queue] job ${jobId} failed:`, err))
       .finally(() => this.pending.delete(jobId));
   }
+  async schedule(_name: string, everyMinutes: number, fn: () => Promise<void>) {
+    const t = setInterval(() => void fn().catch((err) => console.error("[queue] scheduled task failed:", err)), Math.max(1, everyMinutes) * 60_000);
+    this.timers.push(t);
+  }
   async stop() {
+    for (const t of this.timers) clearInterval(t);
     await this.chain;
   }
 }

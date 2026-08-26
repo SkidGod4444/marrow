@@ -10,8 +10,8 @@ import { Eyebrow, TimestampButton } from "./timestamp-link";
 import { Transcript } from "./transcript";
 
 /** Item page body: sticky player + chapters on the left, Reader / Chat / Transcript on the right (PRD §14 Phase 3). */
-export function ItemView({ doc, initialT = null }: { doc: PresentedDocument; initialT?: number | null }) {
-  const [tab, setTab] = useState<"reader" | "chat" | "transcript">("reader");
+export function ItemView({ doc, initialT = null, initialTab = "reader" }: { doc: PresentedDocument; initialT?: number | null; initialTab?: "reader" | "chat" | "transcript" }) {
+  const [tab, setTab] = useState<"reader" | "chat" | "transcript">(initialTab);
   const [seed, setSeed] = useState<string | null>(null);
   const ask = useCallback((prompt: string) => {
     setSeed(prompt);
@@ -21,7 +21,7 @@ export function ItemView({ doc, initialT = null }: { doc: PresentedDocument; ini
 
   return (
     <PlayerProvider videoId={doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null} initialT={initialT}>
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10">
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
           <PlayerFrame />
           {doc.chapters.length > 0 && (
@@ -51,7 +51,7 @@ export function ItemView({ doc, initialT = null }: { doc: PresentedDocument; ini
             <Reader doc={doc} onAsk={ask} />
           </TabsContent>
           <TabsContent value="chat" keepMounted>
-            <Chat itemId={doc.id} seed={seed} onSeedConsumed={consumed} />
+            <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} />
           </TabsContent>
           <TabsContent value="transcript">
             <Transcript doc={doc} />

@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import {
-  SOURCE_TYPES, createIngest, createNamespace, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem,
-  getJobStatus, getNamespace, getNamespaceGraph, listEntities, listItems, listNamespaces, logEvent, lookupEntity, presentDocument, streamVideoChat,
+  SOURCE_TYPES, type SourceKind, addSource, archiveItem, createIngest, createNamespace, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument,
+  getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity,
+  pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
 } from "@marrow/core";
 import { type ServerDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
@@ -50,6 +51,70 @@ export function createApp(deps: AppDeps) {
     const ns = await getNamespace(deps.db, c.req.param("ref"));
     if (!ns) return c.json({ error: "namespace not found" }, 404);
     return c.json({ entities: await listEntities(deps.db, ns.id) });
+  });
+
+  app.post("/namespaces/:ref/summary", async (c) => {
+    const ns = await getNamespace(deps.db, c.req.param("ref"));
+    if (!ns) return c.json({ error: "namespace not found" }, 404);
+    return c.json(await refreshNamespaceSummary({ db: deps.db, generate: deps.generate }, ns.id));
+  });
+
+  // ---- Per-namespace chat (PRD §6.1) ----
+  app.post("/namespaces/:ref/chat", async (c) => {
+    const ns = await getNamespace(deps.db, c.req.param("ref"));
+    if (!ns) return c.json({ error: "namespace not found" }, 404);
+    const body = await c.req.json<{ messages: UIMessage[] }>();
+    if (!Array.isArray(body.messages) || !body.messages.length) return c.json({ error: "messages are required" }, 400);
+    return streamNamespaceChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel, embedQuery: deps.embedQuery, rerank: deps.rerank }, { namespace: ns, messages: body.messages });
+  });
+
+  // ---- Subscriptions (PRD §6.4) ----
+  app.get("/sources", async (c) => {
+    const ref = c.req.query("namespace");
+    const ns = ref ? await getNamespace(deps.db, ref) : null;
+    if (ref && !ns) return c.json({ error: "namespace not found" }, 404);
+    return c.json({ sources: await listSources(deps.db, ns?.id) });
+  });
+
+  app.post("/sources", async (c) => {
+    const body = await c.req.json<{ namespace: string; url: string; kind?: SourceKind; title?: string; poll?: boolean }>();
+    try {
+      const res = await addSource(deps.db, body);
+      const poll = body.poll === undefined ? true : body.poll;
+      const polled = poll ? await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, res.source) : null;
+      return c.json({ source: res.source, created: res.created, poll: polled }, res.created ? 201 : 200);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  app.delete("/sources/:id", async (c) => ((await removeSource(deps.db, c.req.param("id"))) ? c.json({ ok: true }) : c.json({ error: "source not found" }, 404)));
+
+  app.post("/sources/:id/poll", async (c) => {
+    const [src] = (await listSources(deps.db)).filter((s) => s.id === c.req.param("id"));
+    if (!src) return c.json({ error: "source not found" }, 404);
+    return c.json(await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, src));
+  });
+
+  app.post("/namespaces/:ref/poll", async (c) => {
+    const ns = await getNamespace(deps.db, c.req.param("ref"));
+    if (!ns) return c.json({ error: "namespace not found" }, 404);
+    return c.json({ results: await pollAllSources({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, ns.id) });
+  });
+
+  // ---- Watch inbox (PRD §6.4) ----
+  app.get("/inbox", async (c) => {
+    try {
+      return c.json(await listInbox(deps.db, { namespace: c.req.query("namespace"), includeArchived: c.req.query("archived") === "1" }));
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 404);
+    }
+  });
+
+  app.post("/items/:id/archive", async (c) => {
+    const body = await c.req.json<{ archived?: boolean }>().catch(() => ({}) as { archived?: boolean });
+    const row = await archiveItem(deps.db, c.req.param("id"), body.archived ?? true);
+    return row ? c.json({ item: row }) : c.json({ error: "item not found" }, 404);
   });
 
   app.get("/namespaces/:ref/graph", async (c) => {
