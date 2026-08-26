@@ -86,6 +86,21 @@ export const segments = pgTable(
   ],
 );
 
+/** Keyframes, mirrored from the document so `get_frame` and search-result captions don't need the JSON. */
+export const frames = pgTable(
+  "frames",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+    t: real("t").notNull(),
+    s3Key: text("s3_key").notNull(),
+    caption: text("caption"),
+    ocrText: text("ocr_text"),
+    sceneScore: real("scene_score"),
+  },
+  (t) => [index("frames_item_t_idx").on(t.itemId, t.t)],
+);
+
 export const entities = pgTable(
   "entities",
   {
@@ -150,6 +165,7 @@ export const jobs = pgTable(
 export type Namespace = typeof namespaces.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type Segment = typeof segments.$inferSelect;
+export type FrameRow = typeof frames.$inferSelect;
 export type Entity = typeof entities.$inferSelect;
 export type Mention = typeof mentions.$inferSelect;
 export type Job = typeof jobs.$inferSelect;

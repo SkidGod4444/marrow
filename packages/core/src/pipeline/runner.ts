@@ -7,6 +7,7 @@ import { STAGE_NAMES, type StageName, type VideoDocument, VideoDocumentSchema, d
 import { newId } from "../ids.ts";
 import { UsageTracker } from "../openai/client.ts";
 import type { Storage } from "../storage/index.ts";
+import { invalidateDocument } from "../services/documents.ts";
 import { nowIso } from "../util.ts";
 import { STAGES } from "./stages/index.ts";
 import type { Providers, StageContext } from "./types.ts";
@@ -28,6 +29,7 @@ export async function loadDocument(storage: Storage, itemId: string): Promise<Vi
 
 export async function saveDocument(storage: Storage, doc: VideoDocument): Promise<void> {
   await storage.put(documentKey(doc.id), JSON.stringify(doc, null, 2), "application/json");
+  invalidateDocument(doc.id);
 }
 
 /**

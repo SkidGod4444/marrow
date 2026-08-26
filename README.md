@@ -6,7 +6,9 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 
 ## Status
 
-**Phase 1 — Ingestion core** (PRD §14): `ingest <youtube-url>` runs pipeline stages 1–8 end to end. Phases 2–6 (MCP + REST, reader + chat web app, subscriptions/inbox/novelty, capture, language mode) follow in order.
+- **Phase 1 — Ingestion core** ✅ `ingest <youtube-url>` runs pipeline stages 1–8 end to end.
+- **Phase 2 — MCP + REST** ✅ every PRD §8 tool over MCP (stdio + Streamable HTTP) and REST, hybrid search with RRF.
+- Phases 3–6 (reader + chat web app, subscriptions/inbox/novelty, capture, language mode) follow in order.
 
 ## Quick start (local, no Docker)
 
@@ -33,6 +35,46 @@ curl localhost:3001/jobs/<job_id>
 ```
 
 Set `MARROW_API_KEY` in `.env` to require `x-api-key` on every request (always do this outside local dev).
+
+## Connect Claude Code (MCP)
+
+**Over HTTP** (recommended — talks to the running server, which also runs ingest jobs):
+
+```bash
+bun run server                                   # or docker compose up
+claude mcp add --transport http marrow http://localhost:3001/mcp --header "x-api-key: $MARROW_API_KEY"
+```
+
+or in a project's `.mcp.json`:
+
+```json
+{ "mcpServers": { "marrow": { "type": "http", "url": "http://localhost:3001/mcp", "headers": { "x-api-key": "<MARROW_API_KEY>" } } } }
+```
+
+**Over stdio** (no server needed; the MCP process runs ingest jobs itself and owns the PGlite DB while it is alive):
+
+```bash
+claude mcp add marrow -- bun run /ABSOLUTE/PATH/marrow/apps/server/src/mcp-stdio.ts
+```
+
+Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns the JPEG), `lookup_entity`, `list_items`, `ingest`, `job_status`, `export_markdown`. Every search hit carries `t_start` and a `deep_link` (`…&t=1423s`) — cite as `title @ MM:SS`.
+
+### REST mirror
+
+| Method + path | MCP tool |
+|---|---|
+| `GET /namespaces` · `POST /namespaces` | `list_namespaces` |
+| `GET /search?namespace=&q=&k=8&source_type=` | `search` |
+| `GET /segments/:id/context?window_s=120` | `get_context` |
+| `GET /items/:id/document?transcript=full\|none&max_entries=&words=1` | `get_video_document` |
+| `GET /frames/:id` (frame or segment id → `image/jpeg`) | `get_frame` |
+| `GET /entities?namespace=&name=` · `GET /namespaces/:ref/entities` | `lookup_entity` |
+| `GET /items?namespace=&status=` · `GET /items/:id` | `list_items` |
+| `POST /ingest {namespace,url,force?}` | `ingest` |
+| `GET /jobs/:id` | `job_status` |
+| `GET /items/:id/export.md?transcript=1` · `GET /namespaces/:ref/export.md` | `export_markdown` |
+
+All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) when `MARROW_API_KEY` is set.
 
 ## Development
 

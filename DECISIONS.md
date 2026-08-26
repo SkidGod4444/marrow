@@ -57,3 +57,15 @@ Owner rule is "latest of everything", which puts TypeScript at 7.x; `typescript-
 ## 2026-08-27 — Real-binary smoke tests confirmed the ffmpeg/yt-dlp command lines
 
 Verified on the dev Mac (not unit-tested, since CI has no binaries): `yt-dlp -J` returns title/channel/upload_date/duration/chapters and the 720p-capped format string downloads + merges to `source.mp4`; the single-pass `select='gt(scene,T)',metadata=print:file=-` keyframe extraction lands exactly on hard cuts with correct `%05d.jpg` ↔ `pts_time` mapping; `silencedetect` parsing + `planChunks` cut at silence midpoints. Homebrew's ffmpeg lacks `drawtext`, so synthetic test videos must use `concat` of `color`/`testsrc` sources. (PRD §5 stages 1, 4)
+
+## 2026-08-27 — `frames` table mirrors document keyframes
+
+PRD §12 lists no frames table (frames live inside the document JSON). `get_frame(segment_id | frame_id)` and search hits' frame captions would otherwise need to fetch and parse a multi-hundred-KB document per call, so the frames stage writes a `frames(id, item_id, t, s3_key, caption, ocr_text, scene_score)` row per keyframe and the vision stage updates captions. The document stays canonical; the table is derived and replaced on re-ingest. (PRD §4.3, §8)
+
+## 2026-08-27 — MCP over Streamable HTTP via `@hono/mcp`, stateless; stdio as a second entrypoint
+
+The HTTP transport mounts at `/mcp` on the same Hono app (behind the API-key middleware) using `@hono/mcp`'s `StreamableHTTPTransport` with `sessionIdGenerator: undefined` — no session bookkeeping for a single owner. `apps/server/src/mcp-stdio.ts` serves the same `McpServer` over stdio for `claude mcp add … -- bun run …`; without `DATABASE_URL` that process owns the PGlite DB and runs ingest jobs itself. Tool handlers and REST routes only map arguments to `@marrow/core` services (PRD §8 "one service layer, two skins"). (PRD §8, §14 Phase 2)
+
+## 2026-08-27 — `capture` deferred to Phase 5; `export_markdown` shipped in Phase 2
+
+PRD §8 lists `capture` among the tools but §14 places capture + text sources in Phase 5, and it needs the text-source pipeline path. `export_markdown` is cheap and immediately useful to agents, so it ships now. (PRD §7, §8, §14)

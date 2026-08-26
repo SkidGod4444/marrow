@@ -12,7 +12,7 @@ Marrow ingests long-form video (YouTube first; later podcasts via RSS, uploads, 
 
 ## Repo state & build order
 
-Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. Check `DECISIONS.md` and `git log` to see which phase is in progress.
+Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1 and 2 are done** (verified with fakes; the live OpenAI acceptance run still needs `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
 
 1. **Phase 1 — Ingestion core.** CLI/endpoint ingests one YouTube URL into a namespace through pipeline stages 1–8. *Accept:* a 1-hr talk yields a valid document JSON with word-level timestamps, ≤120 captioned keyframes, article, references, segments in DB; re-running is idempotent; a failed stage resumes without redoing earlier ones.
 2. **Phase 2 — MCP + REST.** All §8 tools live; Claude Code connects via a config snippet documented in the README. *Accept:* `search` over a 10-video namespace returns timestamped deep-linked segments; `get_frame` returns an image; `lookup_entity` returns cross-video mentions.
@@ -31,7 +31,8 @@ Package manager is **bun** (Turborepo over bun workspaces) — never npm/pnpm. R
 | Tests (Vitest, PGlite in-memory, fake providers — no network) | `bun run test` · single file: `bunx vitest run packages/core/src/pipeline/runner.test.ts` · watch: `bun run test:watch` |
 | Lint | `bun run lint` |
 | CLI (runs the pipeline in-process) | `bun run cli ns create <name>` · `bun run cli ingest <url> --ns <name> [--force] [--stages a,b]` · `bun run cli job <job_id>` · `bun run cli doc <item_id>` |
-| Server (REST + job runner; MCP from Phase 2) | `bun run server` · `bun run server:dev` (watch) |
+| Server (REST + MCP over HTTP at `/mcp` + job runner) | `bun run server` · `bun run server:dev` (watch) |
+| MCP over stdio (for `claude mcp add marrow -- bun run …/apps/server/src/mcp-stdio.ts`) | `bun run apps/server/src/mcp-stdio.ts` |
 | DB migration after editing `packages/core/src/db/schema.ts` | `bun run db:generate` (then hand-add any `CREATE EXTENSION` lines) · `bun run db:migrate` |
 | Full local stack | `docker compose up --build` (Postgres+pgvector, MinIO, server on :3001) |
 
@@ -48,9 +49,11 @@ packages/core/src/
   openai/              whisper-1 transcription, Responses-API structured generation (+web_search), vision, embeddings, PRICING + UsageTracker
   media/               ffmpeg (audio extract, silencedetect chunk planning, scene keyframes, pruning) and yt-dlp wrappers
   pipeline/            types (Providers = everything mockable), runner (checkpointed stage loop), stages/*, segmenter, prompts, context, testkit (fakes)
-  services/            namespaces, ingest (idempotency), jobs, items, events, entities (entity index upsert)
+  services/            namespaces, ingest (idempotency), jobs, items, events, entities (index upsert + lookup_entity),
+                       search (hybrid RRF), context, frames (get_frame), documents (TTL cache + presentDocument), export (markdown)
   queue.ts             JobQueue: pg-boss (real Postgres) or in-process serial fallback
-apps/server/src/       app.ts (Hono routes), index.ts (boot: db + storage + queue + Bun.serve), cli.ts
+apps/server/src/       app.ts (Hono REST routes + /mcp mount), mcp.ts (MCP tool registrations), deps.ts (ServerDeps, real embed/rerank),
+                       index.ts (boot: db + storage + queue + Bun.serve), mcp-stdio.ts (stdio transport entrypoint), cli.ts
 docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose.yml at root
 ```
 
@@ -62,7 +65,9 @@ docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose
 
 **Segments are the retrieval unit** (PRD §4.4): ~200–400 tokens, split on sentence + chapter boundaries, carrying `t_start`/`t_end`, `frame_ids` on screen during the span, an embedding, and an FTS vector. Text sources produce segments without timestamps; owner notes are stored as segments (`source_type: note`) so they search alongside transcripts. **Every retrieval result must carry a deep link** — `{source_url}&t={int(t_start)}s` for YouTube.
 
-**Retrieval is hybrid from day one** (PRD §8): vector + BM25/FTS merged with RRF, over-fetch 4k then rerank to k (cheap LLM rerank or score fusion). Pure vector misses exact paper/repo names. `search` must accept a `source_type` filter and return text, title, `t_start`, deep link, and frame captions.
+**Retrieval is hybrid from day one** (PRD §8): `services/search.ts` runs a pgvector cosine leg and a `websearch_to_tsquery` FTS leg (each over-fetching `SEARCH_OVERFETCH`×k), merges with reciprocal rank fusion, optionally reranks with the cheap LLM (`SEARCH_RERANK=llm`), then hydrates title/deep link/frame captions from `items` + `frames`. Pure vector misses exact paper/repo names; segments without embeddings (notes) are still reachable via FTS. `source_type` filters both legs.
+
+**Two skins, one service layer.** `apps/server/src/mcp.ts` (MCP tools) and `apps/server/src/app.ts` (REST routes) both only map arguments onto `@marrow/core` services — put logic in `packages/core/src/services/`, never in a route or tool handler. The MCP HTTP transport is stateless (`sessionIdGenerator: undefined`) and sits behind the same API-key middleware. Keyframes are mirrored into the `frames` table so `get_frame` and search captions never load the JSON document; documents themselves go through the 5-minute `getDocument` cache (invalidated by the runner on save).
 
 **One service layer, two skins.** REST and MCP (stdio + HTTP transport) expose the same functions — `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns MCP image content), `lookup_entity`, `list_items`, `ingest`, `job_status`, `capture`, `export_markdown` (full table in PRD §8). Implement each once in the service layer; the REST routes and MCP tool handlers are thin adapters. Auth is one owner API key in a header.
 

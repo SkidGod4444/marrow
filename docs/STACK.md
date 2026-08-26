@@ -30,7 +30,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | Strong chat model | **OpenAI `gpt-5.6-terra`** (`gpt-5.6-sol` as opt-in override). Interactive chat only — never in the pipeline. |
 | Web search provider | **OpenAI Responses API `web_search` tool** (used with Luna for reference resolution; with Terra in chat). |
 | Reranker | **RRF score fusion** by default; optional Luna rerank behind a flag. |
-| MCP SDK | `@modelcontextprotocol/sdk` — stdio + Streamable HTTP. |
+| MCP SDK | `@modelcontextprotocol/sdk` (stdio + `InMemoryTransport` for tests) with **`@hono/mcp`** `StreamableHTTPTransport` mounted at `/mcp` on the same Hono app, stateless mode. |
 | OpenAI client | Official `openai` SDK in the pipeline (transcription needs `verbose_json` word output). Vercel AI SDK only in the web app for streaming chat. |
 | Tests / lint | **Vitest** (PGlite in-memory per test file, fake providers); ESLint; `tsc --noEmit`. Live tests gated behind `LIVE=1`. |
 

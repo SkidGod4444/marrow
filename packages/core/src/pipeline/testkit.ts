@@ -18,7 +18,20 @@ export async function testEnv() {
 
 const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 
-export type FakeOptions = { durationS?: number; hasVideo?: boolean; failAt?: keyof Providers };
+/** Deterministic hashed bag-of-words vector — cosine similarity tracks term overlap, so hybrid search is testable. */
+export function fakeEmbedding(text: string, dims = 1536): number[] {
+  const v: number[] = Array.from({ length: dims }, () => 0);
+  for (const w of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
+    let h = 2166136261;
+    for (let i = 0; i < w.length; i++) h = Math.imul(h ^ w.charCodeAt(i), 16777619);
+    const j = Math.abs(h) % dims;
+    v[j] = (v[j] ?? 0) + 1;
+  }
+  const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+  return v.map((x) => x / norm);
+}
+
+export type FakeOptions = { durationS?: number; hasVideo?: boolean; failAt?: keyof Providers; topic?: string };
 
 /** A 20-minute talk with 3 chapters, 6 scene changes, 2 references. Deterministic. */
 export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Record<string, number> } {
@@ -29,14 +42,20 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     if (opts.failAt === name) throw new Error(`simulated failure in ${name}`);
   };
   const words = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"];
+  let topic = "sim-to-real for actuators";
+  const topicOf = (url: string) => {
+    const id = new URL(url).searchParams.get("v") ?? "";
+    return id.includes("-") ? id.replace(/[-_]+/g, " ") : (opts.topic ?? "sim-to-real for actuators");
+  };
 
   return {
     calls,
     async fetchMetadata(url) {
       hit("fetchMetadata");
+      topic = topicOf(url);
       return {
         id: "vid1",
-        title: "Sim-to-real for actuators",
+        title: `Talk: ${topic}`,
         channel: "Test Channel",
         upload_date: "20260101",
         duration,
@@ -89,7 +108,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       const segments: Array<{ start: number; end: number; text: string }> = [];
       const ws: Array<{ word: string; start: number; end: number }> = [];
       for (let t = 0; t < duration; t += 10) {
-        const text = `${words[(t / 10) % words.length]} ${words[(t / 10 + 3) % words.length]} we talk about the Tobin et al paper and domain randomization at ${t}.`;
+        const text = `${words[(t / 10) % words.length]} ${words[(t / 10 + 3) % words.length]} on ${topic}: we talk about the Tobin et al paper and domain randomization at ${t}.`;
         segments.push({ start: t, end: t + 10, text });
         text.split(" ").forEach((w, i) => ws.push({ word: w, start: t + i * 0.5, end: t + i * 0.5 + 0.4 }));
       }
@@ -138,13 +157,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     async embed(texts, usage) {
       hit("embed");
       usage.add("text-embedding-3-small", { input_tokens: texts.length * 300, requests: 1 });
-      return texts.map((t, i) => {
-        const v: number[] = Array.from({ length: 1536 }, () => 0);
-        v[i % 1536] = 1;
-        const j = (t.length * 7) % 1536;
-        v[j] = (v[j] ?? 0) + 0.5;
-        return v;
-      });
+      return texts.map((t) => fakeEmbedding(t));
     },
   };
 }

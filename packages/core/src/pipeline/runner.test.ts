@@ -31,7 +31,7 @@ describe("pipeline runner (Phase 1 acceptance)", () => {
 
     const doc = await loadDocument(env.storage, res.item.id);
     expect(doc).not.toBeNull();
-    expect(doc!.title).toBe("Sim-to-real for actuators");
+    expect(doc!.title).toBe("Talk: sim-to-real for actuators");
     expect(doc!.transcript.length).toBe(360);
     expect(doc!.transcript[0]!.words.length).toBeGreaterThan(5); // word-level timestamps
     expect(doc!.frames.length).toBeGreaterThan(0);

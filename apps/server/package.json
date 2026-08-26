@@ -11,7 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@hono/mcp": "^0.3.2",
     "@marrow/core": "workspace:*",
-    "hono": "^4.13.5"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "hono": "^4.13.5",
+    "zod": "^4.4.3"
   }
 }

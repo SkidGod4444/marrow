@@ -39,6 +39,10 @@ export const ConfigSchema = z.object({
   FFMPEG_BIN: z.string().default("ffmpeg"),
   FFPROBE_BIN: z.string().default("ffprobe"),
 
+  // Retrieval (PRD §8): hybrid vector + FTS merged with RRF, over-fetch SEARCH_OVERFETCH×k, optional LLM rerank.
+  SEARCH_OVERFETCH: z.coerce.number().default(4),
+  SEARCH_RERANK: z.enum(["rrf", "llm"]).default("rrf"),
+
   // Server
   PORT: z.coerce.number().default(3001),
   MARROW_API_KEY: z.string().optional(),
