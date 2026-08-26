@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 /** Re-fetch server data on an interval while something is in flight (ingesting items), so status stays live. */
-export function AutoRefresh({ active, everyMs = 8000 }: { active: boolean; everyMs?: number }) {
+export function AutoRefresh({ active, everyMs = 6000, idleMs = 20000 }: { active: boolean; everyMs?: number; idleMs?: number }) {
   const router = useRouter();
   useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => router.refresh(), everyMs);
+    // Always poll gently so an ingest started elsewhere (library, MCP, a subscription) shows up; faster while in flight.
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, active ? everyMs : idleMs);
     return () => clearInterval(t);
-  }, [active, everyMs, router]);
+  }, [active, everyMs, idleMs, router]);
   return null;
 }

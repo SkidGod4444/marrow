@@ -31,13 +31,14 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
       const res = await fetch("/api/marrow/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ namespace, url: url.trim() }) });
       const body = (await res.json()) as { job_id?: string; reused?: boolean; error?: string };
       if (!res.ok) throw new Error(body.error ?? res.statusText);
-      toast.success(body.reused ? "Already in the library" : "Queued for ingestion", { description: body.reused ? "Resuming if it had failed." : "It appears in the list as it moves through the pipeline." });
+      toast.success(body.reused ? "Already in the library" : "Queued", { description: body.reused ? "Resuming if it had failed." : "Watch it come in on the inbox." });
       setUrl("");
       if (creating) {
         setChoice(namespace);
         setNewName("");
       }
-      router.refresh();
+      if (body.reused) router.refresh();
+      else router.push("/");
     } catch (err) {
       toast.error("Couldn't ingest", { description: (err as Error).message });
     } finally {

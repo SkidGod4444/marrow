@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PresentedDocument } from "@/lib/api";
 import { Chat } from "./chat";
+import { Description } from "./description";
 import { PlayerFrame, PlayerProvider, youtubeId } from "./player";
 import { Reader } from "./reader";
 import { Eyebrow, TimestampButton } from "./timestamp-link";
@@ -24,14 +25,15 @@ export function ItemView({ doc, initialT = null, initialTab = "reader" }: { doc:
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10">
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
           <PlayerFrame />
+          {doc.description.trim() && <Description text={doc.description} />}
           {doc.chapters.length > 0 && (
             <div className="space-y-2">
               <Eyebrow>Chapters</Eyebrow>
-              <ol className="max-h-56 space-y-1 overflow-y-auto">
+              <ol className="flex flex-wrap gap-x-4 gap-y-1.5">
                 {doc.chapters.map((c, i) => (
-                  <li key={i} className="flex items-baseline gap-3 text-sm">
-                    <TimestampButton t={c.t_start} className="w-12 text-left" />
-                    <span className="truncate">{c.title}</span>
+                  <li key={i} className="inline-flex items-center gap-1.5 text-[13px]">
+                    <TimestampButton t={c.t_start} />
+                    <span className="max-w-[16rem] truncate text-foreground/85">{c.title}</span>
                   </li>
                 ))}
               </ol>

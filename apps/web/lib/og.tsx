@@ -9,27 +9,17 @@ export const OG_SIZE = { width: 1200, height: 630 };
 
 const fontCache = new Map<string, Promise<ArrayBuffer | null>>();
 
-/** Google Fonts TTF for Satori (which can't read woff2). Cached per process; returns null offline. */
-export function googleFont(family: string, weight: number): Promise<ArrayBuffer | null> {
-  const key = `${family}:${weight}`;
-  if (!fontCache.has(key)) {
+/** Bundled WOFF from @fontsource (Satori reads TTF/OTF/WOFF) — no network at render time. */
+export function localFont(relPath: string): Promise<ArrayBuffer | null> {
+  if (!fontCache.has(relPath)) {
     fontCache.set(
-      key,
-      (async () => {
-        try {
-          const css = await fetch(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}&display=swap`, {
-            headers: { "user-agent": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0" }, // old UA → TTF
-          }).then((r) => r.text());
-          const url = /src:\s*url\(([^)]+\.(?:ttf|otf))\)/.exec(css)?.[1];
-          if (!url) return null;
-          return await fetch(url).then((r) => r.arrayBuffer());
-        } catch {
-          return null;
-        }
-      })(),
+      relPath,
+      readFile(join(process.cwd(), "node_modules", relPath))
+        .then((b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer)
+        .catch(() => null),
     );
   }
-  return fontCache.get(key)!;
+  return fontCache.get(relPath)!;
 }
 
 let markCache: Promise<string> | null = null;
@@ -73,7 +63,10 @@ export function Keycap({ children, live = false }: { children: ReactNode; live?:
 }
 
 export async function ogFonts() {
-  const [serif, mono] = await Promise.all([googleFont("Source Serif 4", 600), googleFont("IBM Plex Mono", 400)]);
+  const [serif, mono] = await Promise.all([
+    localFont("@fontsource/source-serif-4/files/source-serif-4-latin-600-normal.woff"),
+    localFont("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff"),
+  ]);
   return [
     ...(serif ? [{ name: "Source Serif 4", data: serif, weight: 600 as const, style: "normal" as const }] : []),
     ...(mono ? [{ name: "IBM Plex Mono", data: mono, weight: 400 as const, style: "normal" as const }] : []),
