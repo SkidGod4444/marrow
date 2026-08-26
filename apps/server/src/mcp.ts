@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  SOURCE_TYPES, addSource, createIngest, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
+  SOURCE_TYPES, addSource, createIngest, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
   getNamespace, getNamespaceGraph, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument,
 } from "@marrow/core";
 import { type ServerDeps, runSearch } from "./deps.ts";
@@ -232,13 +232,14 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       inputSchema: {
         video_id: z.string().optional(),
         namespace: z.string().optional(),
-        transcript: z.boolean().default(false).describe("Include the full timestamped transcript (video_id only)"),
+        transcript: z.boolean().default(false).describe("Include the full timestamped transcript as speaker-labelled dialogue (video_id only)"),
+        format: z.enum(["md", "txt"]).default("md").describe("Markdown with links, or plain text"),
       },
     },
-    async ({ video_id, namespace, transcript }) => {
+    async ({ video_id, namespace, transcript, format }) => {
       if (video_id) {
-        const md = await exportItemMarkdown(deps, video_id, { transcript });
-        return md ? text(md) : fail(`no document for ${video_id}`);
+        const out = format === "txt" ? await exportItemText(deps, video_id, { transcript }) : await exportItemMarkdown(deps, video_id, { transcript });
+        return out ? text(out) : fail(`no document for ${video_id}`);
       }
       if (namespace) {
         const md = await exportNamespaceMarkdown(deps, namespace);

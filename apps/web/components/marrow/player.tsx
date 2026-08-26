@@ -60,11 +60,12 @@ export function usePlayerOptional(): PlayerApi | null {
   return useContext(PlayerContext);
 }
 
+/** The 11-character YouTube id, or null when the URL doesn't carry a real one (seeded demo items, other sources). */
 export function youtubeId(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1) || null;
-    return u.searchParams.get("v");
+    const id = u.hostname.includes("youtu.be") ? u.pathname.slice(1) : u.searchParams.get("v");
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
   } catch {
     return null;
   }
@@ -78,7 +79,7 @@ export function PlayerFrame({ className = "" }: { className?: string }) {
   if (!host) throw new Error("PlayerFrame must be used inside <PlayerProvider>");
   return (
     <div ref={host.hostRef} className={`aspect-video w-full overflow-hidden rounded-lg border bg-black [&>div]:size-full [&_iframe]:size-full ${className}`}>
-      {!host.videoId && <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No embeddable player for this source</div>}
+      {!host.videoId && <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">No embeddable player for this source</div>}
     </div>
   );
 }

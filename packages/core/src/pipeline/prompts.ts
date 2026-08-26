@@ -88,3 +88,11 @@ export const NamespaceSummarySchema = z.object({
 export const SUMMARY_SYSTEM = `You write the standing summary of a topic-scoped research corpus built from videos and captured text. Input: the items (title, channel, one-paragraph summary each) and the entity index (papers, tools, people, techniques with mention and stance counts).
 
 Write ≤ 250 words of markdown with three short parts: what the corpus covers; recurring themes; notable disagreements or tensions between sources (cite the video titles). Be specific and dense; no preamble, no bullet-point padding.`;
+
+// ---- PRD §5 stage 3 diarization: name the speakers ----
+
+export const SpeakerLabelsSchema = z.object({
+  speakers: z.array(z.object({ id: z.string().describe("S1, S2, …"), label: z.string().describe("Short role/name: 'Host', 'Guest — Jane Doe', 'Interviewer'. Use a real name only when it is said or in the metadata.") })),
+});
+
+export const SPEAKER_LABELS_SYSTEM = `You label the speakers of a podcast/interview transcript. You get the title, channel, description and a sample of speaker-tagged lines (S1, S2, …). Return one label per speaker id: a role ("Host", "Guest", "Interviewer", "Panelist") plus the person's name when it is clearly stated in the lines or metadata ("Host — Lex Fridman"). Never invent names. Every id in the sample must be labelled.`;

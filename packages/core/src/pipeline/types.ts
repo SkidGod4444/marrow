@@ -6,6 +6,7 @@ import type { Keyframe, ProbeInfo, Silence } from "../media/ffmpeg.ts";
 import type { YtMeta } from "../media/ytdlp.ts";
 import type { UsageTracker } from "../openai/client.ts";
 import type { GenerateOpts } from "../openai/text.ts";
+import type { DiarSegment, KnownSpeaker } from "../openai/diarize.ts";
 import type { SttResult } from "../openai/transcribe.ts";
 import type { FrameDescription } from "../openai/vision.ts";
 import type { Storage } from "../storage/index.ts";
@@ -20,6 +21,7 @@ export interface Providers {
   cutAudio(src: string, start: number, end: number, out: string): Promise<void>;
   extractKeyframes(video: string, outDir: string): Promise<Keyframe[]>;
   transcribe(path: string, usage: UsageTracker): Promise<SttResult>;
+  diarize(path: string, opts: { known?: KnownSpeaker[]; language?: string | null }, usage: UsageTracker): Promise<DiarSegment[]>;
   describeFrame(jpeg: Uint8Array, usage: UsageTracker): Promise<FrameDescription>;
   generate<T extends z.ZodType>(opts: GenerateOpts<T>, usage: UsageTracker): Promise<z.infer<T>>;
   embed(texts: string[], usage: UsageTracker): Promise<number[][]>;

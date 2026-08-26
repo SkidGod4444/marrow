@@ -28,6 +28,7 @@ export const PRICING: Record<string, { in?: number; cached?: number; out?: numbe
   "text-embedding-3-small": { in: 0.02 },
   "text-embedding-3-large": { in: 0.13 },
   "whisper-1": { perMinute: 0.006 },
+  "gpt-4o-transcribe-diarize": { perMinute: 0.006 }, // ≈ $2.50/M audio-input tokens; per-minute estimate for the job ledger
   web_search: { perCall: 0.01 },
 };
 

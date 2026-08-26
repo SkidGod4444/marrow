@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { fmtTs } from "@/lib/time";
+import { fmtDate, fmtTs } from "@/lib/time";
 
 /** Inbox entries: title, summary, novelty verdict with "new" spans as deep links, and Read / Chat / Skip. */
 export function InboxList({ entries, pending, showNamespace }: { entries: InboxEntry[]; pending: InboxEntry[]; showNamespace: boolean }) {
@@ -44,7 +44,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 {showNamespace && <span className="text-foreground/80">{e.namespace.name}</span>}
                 {e.channel && <span>{e.channel}</span>}
                 {e.durationS ? <span>{fmtTs(e.durationS)}</span> : null}
-                <span>{new Date(e.createdAt).toLocaleDateString()}</span>
+                <span>{fmtDate(e.createdAt)}</span>
               </p>
               <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">
                 <Link href={`/items/${e.id}`} className="hover:underline">

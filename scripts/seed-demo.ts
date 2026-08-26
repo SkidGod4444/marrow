@@ -8,7 +8,7 @@ const count = Number(process.argv[2] ?? 3);
 const { db, close } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
 const storage = createStorage(config);
 const ns = (await getNamespace(db, "demo")) ?? (await createNamespace(db, { name: "demo", description: "Fake items seeded by scripts/seed-demo.ts" }));
-const topics = ["kv cache compression", "sim-to-real actuator backlash", "speculative decoding tricks", "flash attention tiling", "domain randomization limits"];
+const topics = ["kv cache compression", "sim-to-real actuator backlash", "speculative decoding tricks", "flash attention tiling", "domain randomization limits", "podcast episode 12 interview on robot learning"];
 for (const topic of topics.slice(0, count)) {
   const res = await createIngest(db, { namespace: ns.name, url: `https://www.youtube.com/watch?v=${topic.replace(/ /g, "-")}` });
   if (res.reused && res.job.state === "done") {

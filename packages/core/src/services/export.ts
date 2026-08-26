@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { type Db, items } from "../db/index.ts";
 import type { VideoDocument } from "../document.ts";
+import { toDialogue } from "../pipeline/speakers.ts";
 import { deepLink, fmtTs } from "../timefmt.ts";
 import type { Storage } from "../storage/index.ts";
 import { getDocument } from "./documents.ts";
@@ -39,9 +40,43 @@ export function documentToMarkdown(doc: VideoDocument, opts: { transcript?: bool
   }
   if (doc.novelty) out.push("## Novelty", "", doc.novelty.verdict, "");
   if (opts.transcript && doc.transcript.length) {
-    out.push("## Transcript", "", ...doc.transcript.map((e) => `${link(doc, e.t_start)} ${e.text}`), "");
+    out.push("## Transcript", "");
+    const label = speakerLabels(doc);
+    const multi = new Set(doc.transcript.map((e) => e.speaker)).size > 1;
+    for (const p of toDialogue(doc.transcript)) {
+      out.push(`${multi ? `**${label(p.speaker)}** ` : ""}${link(doc, p.t_start)}  \n${p.text}`, "");
+    }
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+export function speakerLabels(doc: VideoDocument): (id: string) => string {
+  const m = new Map(doc.speakers.map((s) => [s.id, s.label]));
+  return (id) => m.get(id) ?? id;
+}
+
+/** Plain text: readable as-is, shareable anywhere. `[MM:SS] Speaker: text` paragraphs after the summary. */
+export function documentToText(doc: VideoDocument, opts: { transcript?: boolean } = {}): string {
+  const out: string[] = [doc.title || doc.id];
+  const meta = [doc.channel, doc.published_at?.slice(0, 10), doc.duration_s ? fmtTs(doc.duration_s) : null, doc.source_url].filter(Boolean);
+  out.push(meta.join(" · "), "");
+  if (doc.article) {
+    out.push("SUMMARY", doc.article.summary, "");
+    if (doc.article.takeaways.length) out.push("TAKEAWAYS", ...doc.article.takeaways.map((t) => `- ${t}`), "");
+  }
+  if (doc.speakers.length > 1) out.push("SPEAKERS", ...doc.speakers.map((s) => `${s.id}: ${s.label}`), "");
+  if ((opts.transcript ?? true) && doc.transcript.length) {
+    out.push("TRANSCRIPT", "");
+    const label = speakerLabels(doc);
+    const multi = new Set(doc.transcript.map((e) => e.speaker)).size > 1;
+    for (const p of toDialogue(doc.transcript)) out.push(`[${fmtTs(p.t_start)}]${multi ? ` ${label(p.speaker)}:` : ""} ${p.text}`, "");
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+export async function exportItemText(deps: { db: Db; storage: Storage }, itemId: string, opts: { transcript?: boolean } = {}): Promise<string | null> {
+  const doc = await getDocument(deps.storage, itemId);
+  return doc ? documentToText(doc, opts) : null;
 }
 
 export async function exportItemMarkdown(deps: { db: Db; storage: Storage }, itemId: string, opts: { transcript?: boolean } = {}): Promise<string | null> {

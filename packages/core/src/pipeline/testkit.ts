@@ -125,6 +125,14 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       }
       return { language: "en", duration, text: segments.map((s) => s.text).join(" "), segments, words: ws };
     },
+    async diarize(_path, o, usage) {
+      hit("diarize");
+      usage.add("gpt-4o-transcribe-diarize", { audio_seconds: duration, requests: 1 });
+      const names = o.known?.length ? o.known.map((k) => k.name) : ["A", "B"];
+      const segs = [];
+      for (let t = 0; t < duration; t += 30) segs.push({ start: t, end: Math.min(duration, t + 30), speaker: names[(t / 30) % names.length]!, text: "…" });
+      return segs;
+    },
     async describeFrame(_jpeg, usage) {
       hit("describeFrame");
       usage.add("gpt-5.6-luna", { input_tokens: 800, output_tokens: 40, requests: 1 });
@@ -159,6 +167,10 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
             { name: "Domain randomization", kind: "technique", aliases: ["DR"] },
           ],
         } as never;
+      }
+      if (o.schemaName === "speaker_labels") {
+        const input = JSON.parse(o.user as string) as { speakers: string[] };
+        return { speakers: input.speakers.map((id, i) => ({ id, label: i === 0 ? "Host" : `Guest ${i}` })) } as never;
       }
       if (o.schemaName === "novelty") {
         const input = JSON.parse(o.user as string) as { sections: Array<{ i: number; heading: string; matches: Array<{ item_id: string; t: number | null }> }> };

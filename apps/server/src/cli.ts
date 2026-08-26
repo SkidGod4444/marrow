@@ -7,7 +7,7 @@ import {
 
 const HELP = `marrow — CLI
 
-  bun run cli ns create <name> [--description "…"] [--language-learning]
+  bun run cli ns create <name> [--description "…"] [--language-learning] [--diarize]
   bun run cli ns list
   bun run cli ingest <youtube-url> --ns <name> [--force] [--stages fetch,transcribe,…]
   bun run cli job <job_id>
@@ -23,6 +23,7 @@ const { values, positionals } = parseArgs({
     ns: { type: "string" },
     description: { type: "string", default: "" },
     "language-learning": { type: "boolean", default: false },
+    diarize: { type: "boolean", default: false },
     force: { type: "boolean", default: false },
     stages: { type: "string" },
     status: { type: "string" },
@@ -54,7 +55,7 @@ try {
     case "ns create": {
       const name = rest[0];
       if (!name) throw new Error("ns create <name>");
-      const ns = await createNamespace(db, { name, description: values.description, flags: { language_learning: values["language-learning"] } });
+      const ns = await createNamespace(db, { name, description: values.description, flags: { language_learning: values["language-learning"], ...(values.diarize ? { diarize: true } : {}) } });
       console.log(`created namespace ${ns.name} (${ns.id})`);
       break;
     }

@@ -23,6 +23,10 @@ export const ConfigSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   STT_MODEL: z.string().default("whisper-1"),
   STT_MAX_BYTES: z.coerce.number().default(25 * 1024 * 1024),
+  // STACK:diarization — second STT pass for multi-speaker audio. auto = podcast/interview heuristics or namespace flag.
+  DIARIZE: z.enum(["auto", "always", "off"]).default("auto"),
+  DIARIZE_MODEL: z.string().default("gpt-4o-transcribe-diarize"),
+  DIARIZE_CHUNK_S: z.coerce.number().default(420),
   LLM_MODEL_CHEAP: z.string().default("gpt-5.6-luna"),
   LLM_MODEL_CHAT: z.string().default("gpt-5.6-terra"),
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),

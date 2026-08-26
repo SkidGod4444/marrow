@@ -8,6 +8,8 @@ import type { Novelty, StageName } from "../document.ts";
 
 export type NamespaceFlags = {
   language_learning?: boolean;
+  /** Force (true) or suppress (false) speaker diarization for every item; unset = heuristics. */
+  diarize?: boolean;
   auto_ingest_links?: boolean;
   ingest_papers?: boolean;
 };

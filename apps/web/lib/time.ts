@@ -25,3 +25,11 @@ export function linkifyTimestamps(md: string): string {
     .replace(/\[((?:\d+:)?\d{1,2}:\d{2})\](?!\()/g, (_m, ts: string) => `[${ts}](#t=${parseTs(ts) ?? 0})`)
     .replace(/(^|[\s(])@\s?((?:\d+:)?\d{1,2}:\d{2})\b/g, (_m, pre: string, ts: string) => `${pre}[${ts}](#t=${parseTs(ts) ?? 0})`);
 }
+
+/** Deterministic YYYY-MM-DD in UTC — identical on the server and in the browser, so it never causes hydration mismatches. */
+export function fmtDate(value: string | Date | null | undefined): string {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}

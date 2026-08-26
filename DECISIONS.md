@@ -105,3 +105,11 @@ The PRD asks namespace chat to cite `title @ MM:SS` with deep links. The model i
 ## 2026-08-27 — UI conventions: cursor-pointer everywhere, responsive by default, shadcn first
 
 Owner asks: all clickables show a pointer (Tailwind v4 preflight had removed it — restored globally, `not-allowed` when disabled), the platform must be responsive with proper spacing, and shadcn/ui components should be used and customised rather than replaced. Checked at 390px width. (owner brief 2026-08-27)
+
+## 2026-08-27 — Diarization as an aligned second pass (resolves PRD §15 Q3)
+
+Owner asked for speaker-attributed dialogue for podcast reading. `gpt-4o-transcribe-diarize` returns speaker spans without word timestamps and caps output at 2,000 tokens per request, so it runs as a second pass on ≤ ~7-minute silence-cut pieces, with 2–10 s reference clips of each speaker from the first piece passed as `known_speaker_references` so labels stay consistent, and the spans are aligned onto the whisper word timestamps (entries split where the speaker changes). It runs only when metadata looks multi-speaker, for `podcast_episode` sources, or when a namespace is flagged `diarize` (`DIARIZE=always|auto|off`). Cost ≈ +$0.36/hour, logged on the job. Speaker names come from a cheap-LLM pass over a sample of tagged lines. (PRD §5 stage 3, §6.3, §15 Q3)
+
+## 2026-08-27 — Text version + exports; hydration and scrolling conventions
+
+`/items/[id]/read` is the "convert to text" surface (article + dialogue, copy/download/print/share) backed by `documentToMarkdown`/`documentToText` and `/export.md|txt`. Client-side dates use `fmtDate` (UTC ISO) because `toLocaleDateString` differs between server and browser and caused hydration warnings; the YouTube player is created only for valid 11-character ids (demo items no longer throw). Smooth scrolling is global (`scroll-behavior: smooth`, disabled under reduced motion) and programmatic scrolls pass `behavior: "smooth"`; print styles turn the reading page into a clean document. (owner brief 2026-08-27)

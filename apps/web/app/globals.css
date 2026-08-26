@@ -345,9 +345,40 @@ textarea {
   font-optical-sizing: auto;
 }
 
+/* Smooth scrolling for the page and every scroll container; off when the OS asks for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html,
+  * {
+    scroll-behavior: smooth;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print: the reading page becomes a clean document (Print → Save as PDF). */
+@media print {
+  header,
+  nav,
+  [data-no-print] {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .timecode {
+    background: none !important;
+    border-color: #bbb !important;
+    box-shadow: none !important;
+    color: #555 !important;
   }
 }

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { fmtDate } from "@/lib/time";
 
 /** PRD §6.4 subscriptions: playlists/channels a namespace follows. Polled on a schedule; "Check now" polls immediately. */
 export function SourcesPanel({ namespace, sources }: { namespace: string; sources: Source[] }) {
@@ -68,7 +69,7 @@ export function SourcesPanel({ namespace, sources }: { namespace: string; source
             >
               <RefreshCw className={busy === s.id ? "animate-spin" : ""} />
             </TooltipTrigger>
-            <TooltipContent>Check for new uploads{s.lastCheckedAt ? ` · last ${new Date(s.lastCheckedAt).toLocaleString()}` : ""}</TooltipContent>
+            <TooltipContent>Check for new uploads{s.lastCheckedAt ? ` · last checked ${fmtDate(s.lastCheckedAt)}` : ""}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-xs" aria-label="Unfollow" disabled={busy !== null} onClick={() => void call(`rm-${s.id}`, `sources/${s.id}`, { method: "DELETE" })} />}>

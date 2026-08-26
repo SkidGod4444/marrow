@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import {
-  SOURCE_TYPES, type SourceKind, addSource, archiveItem, createIngest, createNamespace, exportItemMarkdown, exportNamespaceMarkdown, getContext, getDocument,
+  SOURCE_TYPES, type SourceKind, addSource, archiveItem, createIngest, createNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument,
   getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity,
   pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
 } from "@marrow/core";
@@ -191,7 +191,12 @@ export function createApp(deps: AppDeps) {
 
   app.get("/items/:id/export.md", async (c) => {
     const md = await exportItemMarkdown(deps, c.req.param("id"), { transcript: c.req.query("transcript") === "1" });
-    return md ? c.text(md, 200, { "content-type": "text/markdown; charset=utf-8" }) : c.json({ error: "document not found" }, 404);
+    return md ? c.text(md, 200, { "content-type": "text/markdown; charset=utf-8", "content-disposition": `inline; filename="${c.req.param("id")}.md"` }) : c.json({ error: "document not found" }, 404);
+  });
+
+  app.get("/items/:id/export.txt", async (c) => {
+    const txt = await exportItemText(deps, c.req.param("id"), { transcript: c.req.query("transcript") !== "0" });
+    return txt ? c.text(txt, 200, { "content-type": "text/plain; charset=utf-8", "content-disposition": `inline; filename="${c.req.param("id")}.txt"` }) : c.json({ error: "document not found" }, 404);
   });
 
   // ---- Per-video chat (PRD §6.1) — AI SDK UI-message stream for `useChat` ----
