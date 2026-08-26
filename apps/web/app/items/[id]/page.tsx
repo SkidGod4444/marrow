@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, FileText } from "lucide-react";
 import { ItemView } from "@/components/marrow/item-view";
 import { api } from "@/lib/api";
 import { fmtTs } from "@/lib/time";
@@ -11,7 +11,14 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: PageProps<"/items/[id]">): Promise<Metadata> {
   const { id } = await params;
   const item = await api.item(id).catch(() => null);
-  return { title: item?.title || "Item" };
+  if (!item) return { title: "Item" };
+  const description = item.summary ? (item.summary.length > 180 ? `${item.summary.slice(0, 177)}…` : item.summary) : `${item.channel ? `${item.channel} · ` : ""}${item.title}`;
+  return {
+    title: item.title || "Item",
+    description,
+    openGraph: { type: "video.other", title: item.title, description, url: `/items/${item.id}` },
+    twitter: { card: "summary_large_image", title: item.title, description },
+  };
 }
 
 export default async function ItemPage({ params, searchParams }: PageProps<"/items/[id]">) {
@@ -52,8 +59,13 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
             source
             <ArrowUpRight className="size-3" />
           </a>
-          <Link href={`/namespaces/${encodeURIComponent(item.namespaceId)}/graph?focus=${item.id}`} className="hover:text-foreground">
-            graph →
+          <Link href={`/items/${item.id}/read`} className="inline-flex items-center gap-1 hover:text-foreground">
+            <FileText className="size-3" />
+            text
+          </Link>
+          <Link href={`/namespaces/${encodeURIComponent(item.namespaceId)}/graph?focus=${item.id}`} className="inline-flex items-center gap-0.5 hover:text-foreground">
+            graph
+            <ArrowRight className="size-3" />
           </Link>
         </p>
       </header>

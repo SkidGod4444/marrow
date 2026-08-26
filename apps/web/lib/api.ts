@@ -26,7 +26,8 @@ export const api = {
   document: (id: string) => apiFetch<PresentedDocument>(`/items/${id}/document?transcript=full`),
   graph: (namespace: string) => apiFetch<NamespaceGraph>(`/namespaces/${encodeURIComponent(namespace)}/graph`),
   namespace: (ref: string) => apiFetch<{ namespaces: NamespaceSummary[] }>("/namespaces").then((r) => r.namespaces.find((n) => n.name === ref || n.id === ref) ?? null),
-  inbox: (namespace?: string) => apiFetch<{ entries: InboxEntry[]; pending: InboxEntry[] }>(`/inbox${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`),
+  inbox: (namespace?: string, archived = false) =>
+    apiFetch<{ entries: InboxEntry[]; pending: InboxEntry[] }>(`/inbox?${new URLSearchParams({ ...(namespace ? { namespace } : {}), ...(archived ? { archived: "1" } : {}) }).toString()}`),
   sources: (namespace?: string) => apiFetch<{ sources: Source[] }>(`/sources${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`).then((r) => r.sources),
   event: (id: string, kind: "read" | "skipped") => apiFetch<{ ok: true }>(`/items/${id}/events`, { method: "POST", body: JSON.stringify({ kind }) }).catch(() => undefined),
 };

@@ -113,3 +113,15 @@ Owner asked for speaker-attributed dialogue for podcast reading. `gpt-4o-transcr
 ## 2026-08-27 — Text version + exports; hydration and scrolling conventions
 
 `/items/[id]/read` is the "convert to text" surface (article + dialogue, copy/download/print/share) backed by `documentToMarkdown`/`documentToText` and `/export.md|txt`. Client-side dates use `fmtDate` (UTC ISO) because `toLocaleDateString` differs between server and browser and caused hydration warnings; the YouTube player is created only for valid 11-character ids (demo items no longer throw). Smooth scrolling is global (`scroll-behavior: smooth`, disabled under reduced motion) and programmatic scrolls pass `behavior: "smooth"`; print styles turn the reading page into a clean document. (owner brief 2026-08-27)
+
+## 2026-08-27 — UX review pass (heuristics + WCAG 2.2) and what changed
+
+Reviewed every page against Nielsen's heuristics and WCAG 2.2. Fixed: current-page state in the nav; skip link and visible focus rings on links; keycap text contrast raised to ≥ 4.5:1 and keycaps to a 24 px target; "Ask about this section" always discoverable (was hover-only, invisible on touch); transcript auto-follow yields to the reader's own scrolling with a "Follow playhead" toggle; skipped items can be shown and restored; ingesting items appear as shimmering cards in the inbox with the live pipeline stage, failures show plainly with Retry, and the inbox auto-refreshes while anything is in flight; namespace summaries render as markdown; graph nodes are keyboard-reachable; route error boundary, 404 and loading states added. User-facing errors never mention env vars or commands (owner feedback). (owner brief 2026-08-27)
+
+## 2026-08-27 — Site metadata and dynamic OpenGraph images
+
+`metadataBase` from `NEXT_PUBLIC_SITE_URL`; per-page titles/descriptions; `robots: noindex` (single-owner tool). OG images are rendered with `next/og` in the app's look (charcoal, Source Serif 4 title, Plex Mono meta, keycap motif) at `/opengraph-image`, `/items/[id]/opengraph-image` (title, channel, duration, summary), and `/namespaces/[name]/opengraph-image`; fonts are fetched from Google Fonts as TTF at render time and cached per process (falls back to the default face offline).
+
+## 2026-08-27 — ffmpeg keyframes: `-pix_fmt yuvj420p -strict unofficial`
+
+The first real ingest failed at the frames stage: some YouTube encodes are full-range YUV and the mjpeg encoder refuses them. Both flags are now on the keyframe command; the failed job resumed from `frames` and completed ($0.003 for a 19 s video). (PRD §5 stage 4)

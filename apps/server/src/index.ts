@@ -34,9 +34,9 @@ let stopping = false;
 const shutdown = async () => {
   if (stopping) return;
   stopping = true;
-  console.log("shutting down…");
+  console.log("shutting down — waiting for in-flight jobs…");
   server.stop();
-  await Promise.race([queue.stop(), new Promise((r) => setTimeout(r, 5000))]);
+  await Promise.race([queue.stop(), new Promise((r) => setTimeout(r, 90_000))]);
   await closeDb().catch(() => undefined);
   process.exit(0);
 };

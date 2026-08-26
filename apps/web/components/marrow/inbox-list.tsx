@@ -1,33 +1,59 @@
 "use client";
 
 import type { InboxEntry } from "@marrow/core";
-import { BookOpenText, MessageSquareText, X } from "lucide-react";
+import { BookOpenText, MessageSquareText, RotateCcw, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fmtDate, fmtTs } from "@/lib/time";
+
+const STAGE_LABEL: Record<string, string> = {
+  fetch: "Downloading",
+  transcribe: "Transcribing",
+  diarize: "Finding speakers",
+  frames: "Picking keyframes",
+  vision: "Reading the slides",
+  article: "Writing the article",
+  enrich: "Resolving references",
+  segment: "Indexing",
+  language: "Extracting expressions",
+  novelty: "Checking what's new",
+};
 
 /** Inbox entries: title, summary, novelty verdict with "new" spans as deep links, and Read / Chat / Skip. */
 export function InboxList({ entries, pending, showNamespace }: { entries: InboxEntry[]; pending: InboxEntry[]; showNamespace: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
 
-  const skip = async (id: string) => {
+  const archive = async (id: string, archived: boolean) => {
     setBusy(id);
     try {
-      const res = await fetch(`/api/marrow/items/${id}/archive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
+      const res = await fetch(`/api/marrow/items/${id}/archive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived }) });
       if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? res.statusText);
-      toast("Skipped", {
-        action: {
-          label: "Undo",
-          onClick: () => void fetch(`/api/marrow/items/${id}/archive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived: false }) }).then(() => router.refresh()),
-        },
-      });
+      if (archived) toast("Skipped", { action: { label: "Undo", onClick: () => void archive(id, false) } });
+      else toast.success("Back in the inbox");
       router.refresh();
     } catch (err) {
-      toast.error("Couldn't skip", { description: (err as Error).message });
+      toast.error(archived ? "Couldn't skip" : "Couldn't restore", { description: (err as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const skip = (id: string) => archive(id, true);
+
+  const retry = async (e: InboxEntry) => {
+    setBusy(e.id);
+    try {
+      const res = await fetch("/api/marrow/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ namespace: e.namespace.name, url: e.sourceUrl }) });
+      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? res.statusText);
+      toast.success("Retrying", { description: "Resumes at the stage that failed." });
+      router.refresh();
+    } catch (err) {
+      toast.error("Couldn't retry", { description: (err as Error).message });
     } finally {
       setBusy(null);
     }
@@ -35,8 +61,54 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
 
   return (
     <div className="space-y-10">
-      {entries.length === 0 && <p className="text-sm text-muted-foreground">You&apos;re caught up.</p>}
+      {entries.length === 0 && pending.length === 0 && <p className="text-sm text-muted-foreground">You&apos;re caught up.</p>}
       <ul className="divide-y divide-border/70 border-y border-border/70">
+        {pending.map((p) => (
+          <li key={p.id} className="py-5">
+            <div
+              className={`relative grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6 ${
+                p.status === "failed" ? "border-destructive/40 bg-destructive/5" : "border-time/30 bg-card shadow-[0_0_0_1px_color-mix(in_oklch,var(--time)_25%,transparent),0_12px_40px_-16px_color-mix(in_oklch,var(--time)_55%,transparent)]"
+              }`}
+            >
+              <div className="min-w-0 space-y-2.5">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
+                  {showNamespace && <span className="text-foreground/80">{p.namespace.name}</span>}
+                  {p.channel && <span>{p.channel}</span>}
+                  {p.durationS ? <span>{fmtTs(p.durationS)}</span> : null}
+                  {p.status === "failed" ? (
+                    <span className="text-destructive">failed{p.job?.stage ? ` while ${(STAGE_LABEL[p.job.stage] ?? p.job.stage).toLowerCase()}` : ""}</span>
+                  ) : (
+                    <Shimmer className="text-[11px]" duration={1.6}>
+                      {p.status === "running" && p.job?.stage ? `${STAGE_LABEL[p.job.stage] ?? p.job.stage}…` : "Queued…"}
+                    </Shimmer>
+                  )}
+                </p>
+                <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">{p.title || p.sourceUrl.replace(/^https?:\/\/(www\.)?/, "")}</h2>
+                {p.status === "failed" ? (
+                  <p className="reading text-[15px] text-foreground/75">We couldn&apos;t finish this one. Retrying picks up where it stopped.</p>
+                ) : (
+                  <div className="max-w-3xl space-y-2" aria-hidden>
+                    <Skeleton className="h-3.5 w-11/12 bg-muted/70" />
+                    <Skeleton className="h-3.5 w-3/4 bg-muted/70" />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-start gap-2 sm:flex-col sm:items-stretch">
+                {p.status === "failed" ? (
+                  <Button variant="outline" size="sm" disabled={busy === p.id} onClick={() => void retry(p)}>
+                    <RotateCcw />
+                    Retry
+                  </Button>
+                ) : (
+                  <span className="inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                    <span className="size-1.5 animate-pulse rounded-full bg-time" aria-hidden />
+                    ingesting
+                  </span>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
         {entries.map((e) => (
           <li key={e.id} className="grid gap-3 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6">
             <div className="min-w-0 space-y-2">
@@ -63,30 +135,23 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 <MessageSquareText />
                 Chat
               </Button>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => void skip(e.id)}>
-                <X />
-                Skip
-              </Button>
+              {e.archivedAt ? (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => void archive(e.id, false)}>
+                  <Undo2 />
+                  Unskip
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => void skip(e.id)}>
+                  <X />
+                  Skip
+                </Button>
+              )}
             </div>
           </li>
         ))}
       </ul>
 
-      {pending.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Ingesting</h2>
-          <ul className="divide-y divide-border/70 border-y border-border/70 text-sm">
-            {pending.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 py-2.5">
-                <span className={`size-1.5 shrink-0 rounded-full ${p.status === "failed" ? "bg-destructive" : p.status === "running" ? "animate-pulse bg-time" : "bg-muted-foreground/40"}`} />
-                <span className="min-w-0 flex-1 truncate">{p.title || p.sourceUrl}</span>
-                {showNamespace && <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">{p.namespace.name}</span>}
-                <span className="font-mono text-[11px] text-muted-foreground">{p.status}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+
     </div>
   );
 }

@@ -191,6 +191,12 @@
   [aria-disabled="true"] {
     cursor: not-allowed;
   }
+  /* Keyboard users get a visible focus ring on links (buttons/inputs already have shadcn's). */
+  a:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -292,8 +298,10 @@
 .timecode {
   display: inline-flex;
   align-items: center;
-  height: 1.25rem;
-  padding: 0 0.4rem;
+  height: 1.5rem; /* ≥ 24px target (WCAG 2.2 target size) */
+  min-width: 2.75rem;
+  justify-content: center;
+  padding: 0 0.45rem;
   border-radius: 5px;
   border: 1px solid var(--key-border);
   background: linear-gradient(to bottom, var(--key-top), var(--key-bottom));
@@ -307,7 +315,7 @@
   font-size: 0.6875rem;
   line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--muted-foreground);
+  color: color-mix(in oklch, var(--foreground) 82%, var(--muted-foreground)); /* ≥ 4.5:1 on the key face */
   transition: color 120ms, border-color 120ms, transform 80ms, box-shadow 80ms, filter 120ms;
 }
 .timecode:hover {

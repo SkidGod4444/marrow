@@ -5,6 +5,7 @@ import { DefaultChatTransport, type UIMessage, isToolUIPart } from "ai";
 import { Eye, MessageSquare, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { Button } from "@/components/ui/button";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput, PromptInputBody, PromptInputButton, PromptInputFooter, type PromptInputMessage, PromptInputSubmit, PromptInputTextarea, PromptInputTools,
@@ -74,7 +75,14 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
           ) : (
             messages.map((m) => <ChatMessage key={m.id} message={m} />)
           )}
-          {error && <p className="text-sm text-destructive">{error.message}</p>}
+          {error && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+              <span className="text-destructive">Couldn&apos;t get an answer just now.</span>
+              <Button variant="outline" size="xs" onClick={() => void regenerate()}>
+                Try again
+              </Button>
+            </div>
+          )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

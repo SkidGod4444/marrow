@@ -1,8 +1,8 @@
 "use client";
 
-import { BookOpenText } from "lucide-react";
+import { BookOpenText, Crosshair } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { PresentedDocument } from "@/lib/api";
 import { usePlayer } from "./player";
@@ -19,9 +19,18 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
     return idx;
   }, [entries, currentTime]);
   const activeRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // Follow the playhead until the reader scrolls on their own; a button re-engages it (Nielsen #3: user control).
+  const [follow, setFollow] = useState(true);
+  const programmatic = useRef(0);
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [active]);
+    if (!follow || !activeRef.current) return;
+    programmatic.current = Date.now();
+    activeRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [active, follow]);
+  const onUserScroll = () => {
+    if (Date.now() - programmatic.current > 900) setFollow(false);
+  };
 
   if (!entries.length) return <p className="text-sm text-muted-foreground">No transcript.</p>;
   const chapterAt = (i: number) => doc.chapters.find((c) => c.t_start <= entries[i]!.t_start && (i === 0 || entries[i - 1]!.t_start < c.t_start));
@@ -35,12 +44,18 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
         <p className="font-mono text-[11px] text-muted-foreground">
           {entries.length} lines{multi ? ` · ${doc.speakers.length} speakers` : ""}
         </p>
-        <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${doc.id}/read`} />}>
-          <BookOpenText />
-          Read as text
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button variant={follow ? "secondary" : "outline"} size="sm" aria-pressed={follow} onClick={() => setFollow((f) => !f)} title={follow ? "Following the playhead — scroll to read freely" : "Jump to the playhead and keep following it"}>
+            <Crosshair />
+            {follow ? "Following" : "Follow playhead"}
+          </Button>
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${doc.id}/read`} />}>
+            <BookOpenText />
+            Read as text
+          </Button>
+        </div>
       </div>
-      <div className="max-h-[70vh] overflow-y-auto py-1 pr-2 lg:max-h-[calc(100vh-14rem)]">
+      <div ref={scrollerRef} onWheel={onUserScroll} onTouchMove={onUserScroll} className="max-h-[70vh] overflow-y-auto py-1 pr-2 lg:max-h-[calc(100vh-14rem)]">
       <Rail>
         {entries.map((e, i) => {
           const chapter = chapterAt(i);

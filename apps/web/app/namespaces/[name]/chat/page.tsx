@@ -2,13 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Chat } from "@/components/marrow/chat";
+import { Markdown } from "@/components/marrow/markdown";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/namespaces/[name]/chat">): Promise<Metadata> {
   const { name } = await params;
-  return { title: `${decodeURIComponent(name)} · chat` };
+  const n = decodeURIComponent(name);
+  return { title: `${n} · chat`, description: `Research chat across every video in the ${n} namespace, with timestamped citations.`, openGraph: { title: `${n} — namespace chat`, url: `/namespaces/${name}/chat` } };
 }
 
 /** PRD §6.1 per-namespace research chat: summary + entity index as context, the §8 retrieval tools as tools. */
@@ -42,7 +44,7 @@ export default async function NamespaceChatPage({ params }: PageProps<"/namespac
         <aside className="space-y-3">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">What this corpus covers</p>
           {ns.summary ? (
-            <div className="md reading text-[15px] text-foreground/85">{ns.summary}</div>
+            <Markdown className="text-[15px] text-foreground/85">{ns.summary}</Markdown>
           ) : (
             <p className="reading text-[15px] text-muted-foreground">The summary is written after the third ingest and refreshed every three after that.</p>
           )}

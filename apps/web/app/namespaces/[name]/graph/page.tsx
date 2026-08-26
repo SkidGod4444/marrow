@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps<"/namespaces/[name]/graph">): Promise<Metadata> {
   const { name } = await params;
-  return { title: `${decodeURIComponent(name)} · graph` };
+  const n = decodeURIComponent(name);
+  return { title: `${n} · graph`, description: `Knowledge graph of the ${n} namespace: videos and the papers, tools, people and techniques they mention.`, openGraph: { title: `${n} — knowledge graph`, url: `/namespaces/${name}/graph` } };
 }
 
 export default async function GraphPage({ params, searchParams }: PageProps<"/namespaces/[name]/graph">) {

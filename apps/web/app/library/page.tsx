@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { IngestForm } from "@/components/marrow/ingest-form";
+import { Markdown } from "@/components/marrow/markdown";
 import { SourcesPanel } from "@/components/marrow/sources-panel";
 import { api } from "@/lib/api";
 import { fmtTs } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Library", description: "Namespaces, what they follow, and every item in them." };
 
 const STATUS: Record<string, { dot: string; label: string }> = {
   ready: { dot: "bg-foreground", label: "ready" },
@@ -58,7 +60,7 @@ export default async function LibraryPage() {
                 </span>
               )}
             </header>
-            {ns.summary && <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{ns.summary}</p>}
+            {ns.summary && <Markdown className="max-w-3xl text-[14px] text-muted-foreground">{ns.summary}</Markdown>}
             <SourcesPanel namespace={ns.name} sources={sourcesByNs[i]!} />
             {items.length === 0 ? (
               <p className="text-sm text-muted-foreground">No items yet.</p>

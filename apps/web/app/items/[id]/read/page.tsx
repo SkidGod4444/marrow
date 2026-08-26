@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: PageProps<"/items/[id]/read">): Promise<Metadata> {
   const { id } = await params;
   const item = await api.item(id).catch(() => null);
-  return { title: item?.title ? `${item.title} — text` : "Read" };
+  if (!item) return { title: "Read" };
+  const description = item.summary ? (item.summary.length > 180 ? `${item.summary.slice(0, 177)}…` : item.summary) : `Text version of ${item.title}`;
+  return { title: `${item.title} — text`, description, openGraph: { type: "article", title: `${item.title} — text version`, description, url: `/items/${item.id}/read` }, twitter: { card: "summary_large_image", title: item.title, description } };
 }
 
 type Paragraph = { speaker: string; t_start: number; t_end: number; text: string };

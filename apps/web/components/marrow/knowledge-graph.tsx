@@ -227,7 +227,19 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
                   data-node
                   transform={`translate(${n.x},${n.y})`}
                   opacity={dim ? 0.22 : 1}
-                  className="cursor-grab active:cursor-grabbing"
+                  className="cursor-grab outline-none active:cursor-grabbing"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${n.type === "item" ? "Video" : n.kind}: ${n.label}`}
+                  aria-pressed={sel}
+                  onFocus={() => setHover(n.id)}
+                  onBlur={() => setHover((h) => (h === n.id ? null : h))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected((s) => (s === n.id ? null : n.id));
+                    }
+                  }}
                   onPointerDown={onNodeDown(n)}
                   onPointerEnter={() => setHover(n.id)}
                   onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}

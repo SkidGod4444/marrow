@@ -102,7 +102,8 @@ export async function extractKeyframes(cfg: Config, video: string, outDir: strin
   await mkdir(outDir, { recursive: true });
   const vf = `select='gt(scene,${cfg.SCENE_THRESHOLD})',metadata=print:file=-,scale=${cfg.FRAME_WIDTH}:-2`;
   const { stdout } = await exec(cfg.FFMPEG_BIN, [
-    "-y", "-hide_banner", "-loglevel", "error", "-i", video, "-vf", vf, "-fps_mode", "vfr", "-q:v", "3",
+    // yuvj420p + strict unofficial: some YouTube encodes are full-range YUV, which the mjpeg encoder otherwise rejects.
+    "-y", "-hide_banner", "-loglevel", "error", "-i", video, "-vf", vf, "-fps_mode", "vfr", "-q:v", "3", "-pix_fmt", "yuvj420p", "-strict", "unofficial",
     join(outDir, "%05d.jpg"),
   ]);
   return parseKeyframeLog(stdout).map((k, i) => ({ ...k, path: join(outDir, `${String(i + 1).padStart(5, "0")}.jpg`) }));

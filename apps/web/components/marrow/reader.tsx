@@ -50,7 +50,7 @@ export function Reader({ doc, onAsk }: { doc: PresentedDocument; onAsk: (prompt:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="-mr-2 -mt-1 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                        className="-mr-2 -mt-1 shrink-0 text-muted-foreground opacity-55 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                         aria-label={`Ask about "${s.heading}"`}
                         onClick={() => onAsk(`Explain the section "${s.heading}"${span ? ` (${span})` : ""} in more depth. What is the argument, and what evidence or examples are given?`)}
                       />
