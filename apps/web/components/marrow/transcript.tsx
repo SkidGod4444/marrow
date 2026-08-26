@@ -39,8 +39,8 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
   const speakerLabel = (id: string) => doc.speakers.find((s) => s.id === id)?.label ?? id;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="font-mono text-[11px] text-muted-foreground">
           {entries.length} lines{multi ? ` · ${doc.speakers.length} speakers` : ""}
         </p>
@@ -55,7 +55,7 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
           </Button>
         </div>
       </div>
-      <div ref={scrollerRef} onWheel={onUserScroll} onTouchMove={onUserScroll} className="max-h-[70vh] overflow-y-auto py-1 pr-2 lg:max-h-[calc(100vh-14rem)]">
+      <div ref={scrollerRef} onWheel={onUserScroll} onTouchMove={onUserScroll} className="max-h-[70vh] overflow-y-auto py-1 pr-2 lg:max-h-none lg:min-h-0 lg:flex-1">
       <Rail>
         {entries.map((e, i) => {
           const chapter = chapterAt(i);

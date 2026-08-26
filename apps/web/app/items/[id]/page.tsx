@@ -46,8 +46,8 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
   void api.event(id, "read");
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
+    <div className="flex flex-col gap-5 lg:-my-8 lg:h-[calc(100dvh-3rem)] lg:min-h-0 lg:py-6">
+      <header className="shrink-0 space-y-2">
         <h1 className="reading max-w-4xl text-[24px] font-semibold leading-[1.15] tracking-[-0.01em] sm:text-[30px]">{doc.title}</h1>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
           {doc.channel && <span>{doc.channel}</span>}
@@ -69,7 +69,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
           </Link>
         </p>
       </header>
-      <ItemView doc={doc} initialT={initialT} initialTab={tab} />
+      <ItemView doc={doc} initialT={initialT} initialTab={tab} className="lg:min-h-0 lg:flex-1" />
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { Eyebrow, TimestampButton } from "./timestamp-link";
 import { Transcript } from "./transcript";
 
 /** Item page body: sticky player + chapters on the left, Reader / Chat / Transcript on the right (PRD §14 Phase 3). */
-export function ItemView({ doc, initialT = null, initialTab = "reader" }: { doc: PresentedDocument; initialT?: number | null; initialTab?: "reader" | "chat" | "transcript" }) {
+export function ItemView({ doc, initialT = null, initialTab = "reader", className = "" }: { doc: PresentedDocument; initialT?: number | null; initialTab?: "reader" | "chat" | "transcript"; className?: string }) {
   const [tab, setTab] = useState<"reader" | "chat" | "transcript">(initialTab);
   const [seed, setSeed] = useState<string | null>(null);
   const ask = useCallback((prompt: string) => {
@@ -22,8 +22,9 @@ export function ItemView({ doc, initialT = null, initialTab = "reader" }: { doc:
 
   return (
     <PlayerProvider videoId={doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null} initialT={initialT}>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10">
-        <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
+      <div className={`grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10 ${className}`}>
+        {/* Left pane scrolls on its own (player stays near the top; long descriptions scroll under it). */}
+        <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <PlayerFrame />
           {doc.description.trim() && <Description text={doc.description} />}
           {doc.chapters.length > 0 && (
@@ -41,21 +42,23 @@ export function ItemView({ doc, initialT = null, initialTab = "reader" }: { doc:
           )}
         </div>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="min-w-0 gap-6">
-          <TabsList variant="line" className="w-full justify-start gap-4 border-b border-border/70">
+        {/* Right pane: tab list stays put; each tab's content scrolls inside the pane. */}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="min-w-0 gap-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+          <TabsList variant="line" className="w-full shrink-0 justify-start gap-4 border-b border-border/70">
             <TabsTrigger value="reader">Reader</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="transcript">
               Transcript{doc.transcript_entries ? <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{doc.transcript_entries}</span> : null}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="reader">
+          <TabsContent value="reader" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
             <Reader doc={doc} onAsk={ask} />
           </TabsContent>
-          <TabsContent value="chat" keepMounted>
-            <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} />
+          {/* keepMounted panels get the `hidden` attribute when inactive; keep that winning over lg:flex. */}
+          <TabsContent value="chat" keepMounted className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col [&[hidden]]:hidden!">
+            <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} className="lg:h-full lg:min-h-0" />
           </TabsContent>
-          <TabsContent value="transcript">
+          <TabsContent value="transcript" className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col">
             <Transcript doc={doc} />
           </TabsContent>
         </Tabs>

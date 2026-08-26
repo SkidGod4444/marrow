@@ -63,7 +63,7 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
   const suggestions = mode === "item" ? ITEM_SUGGESTIONS : NAMESPACE_SUGGESTIONS;
 
   return (
-    <div className={`flex h-[70vh] min-h-[420px] flex-col rounded-lg border border-border/70 bg-card lg:h-[calc(100vh-12rem)] ${className}`}>
+    <div className={`flex h-[70vh] min-h-[420px] flex-col rounded-lg border border-border/70 bg-card ${className}`}>
       <Conversation className="flex-1">
         <ConversationContent>
           {messages.length === 0 ? (
