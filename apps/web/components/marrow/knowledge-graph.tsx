@@ -37,11 +37,15 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
 
   // ---- layout ----
   useEffect(() => {
+    // Centre the layout on the canvas itself, so the graph is visible even before (or without) a fit-to-view.
+    const rect = svgRef.current?.getBoundingClientRect();
+    const cx = rect?.width ? rect.width / 2 : 400;
+    const cy = rect?.height ? rect.height / 2 : 300;
     const maxMentions = Math.max(1, ...data.nodes.map((n) => (n.type === "entity" ? n.mentions : 0)));
     const ns: SimNode[] = data.nodes.map((n, i) => ({
       ...n,
-      x: Math.cos(i) * 200,
-      y: Math.sin(i) * 200,
+      x: cx + Math.cos(i) * 200,
+      y: cy + Math.sin(i) * 200,
       r: n.type === "item" ? 9 : 4 + Math.sqrt(n.mentions / maxMentions) * 10,
     }));
     const byId = new Map(ns.map((n) => [n.id, n]));
@@ -56,7 +60,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
     const sim = forceSimulation(ns)
       .force("link", forceLink<SimNode, SimLink>(ls).id((d) => d.id).distance((l) => 110 + 60 / Math.sqrt(l.edge.weight)).strength(0.5))
       .force("charge", forceManyBody().strength((d) => ((d as SimNode).type === "item" ? -420 : -220)))
-      .force("center", forceCenter(0, 0))
+      .force("center", forceCenter(cx, cy))
       .force("collide", forceCollide<SimNode>().radius((d) => d.r + 14 + labelPad(d)).iterations(2))
       .stop();
     for (let i = 0; i < 400; i++) sim.tick();
@@ -99,7 +103,19 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
     else sel.call(zoomRef.current.transform, t);
   }, [nodes]);
   useEffect(() => {
-    fit(false);
+    // The canvas can still be laying out on the first frame; retry a few times until it has a size.
+    let tries = 0;
+    let raf = 0;
+    const attempt = () => {
+      const w = svgRef.current?.getBoundingClientRect().width ?? 0;
+      if (w > 0 || tries > 20) fit(false);
+      else {
+        tries++;
+        raf = requestAnimationFrame(attempt);
+      }
+    };
+    attempt();
+    return () => cancelAnimationFrame(raf);
   }, [fit]);
   useEffect(() => {
     // Re-fit when the canvas changes size (responsive layouts, rotated phones, embedded views).
@@ -194,10 +210,10 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
                   y1={l.source.y}
                   x2={l.target.x}
                   y2={l.target.y}
-                  stroke={lit ? "var(--time)" : "var(--border)"}
+                  stroke={lit ? "var(--time)" : "var(--muted-foreground)"}
                   strokeWidth={lit ? 1.5 + Math.min(2, l.edge.weight * 0.3) : 1 + Math.min(1.5, l.edge.weight * 0.2)}
                   strokeDasharray={contested ? "4 3" : undefined}
-                  opacity={emphasis && !lit ? 0.25 : 0.9}
+                  opacity={emphasis && !lit ? 0.15 : 0.45}
                 />
               );
             })}

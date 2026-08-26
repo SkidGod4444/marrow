@@ -75,8 +75,8 @@ export function Eyebrow({ children }: { children: ReactNode }) {
  */
 export function Rail({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`relative pl-[4.75rem] ${className}`}>
-      <span aria-hidden className="absolute bottom-1 left-14 top-1 w-px bg-border" />
+    <div className={`relative pl-[6.25rem] ${className}`}>
+      <span aria-hidden className="absolute bottom-1 left-20 top-1 w-px bg-border" />
       {children}
     </div>
   );
@@ -86,7 +86,7 @@ export function RailEntry({ t, active = false, children, className = "" }: { t: 
   return (
     <div className={`relative ${className}`}>
       {t !== null && (
-        <div className="absolute right-full top-[0.3rem] mr-[1.05rem] flex items-center gap-2.5">
+        <div className="absolute right-full top-[0.3rem] mr-5 flex items-center gap-2.5">
           <TimestampButton t={t} active={active} />
           <span aria-hidden className={`size-[7px] translate-x-1/2 rounded-full ring-2 ring-background transition-colors ${active ? "bg-time" : "bg-border"}`} />
         </div>
