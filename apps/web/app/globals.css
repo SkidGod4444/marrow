@@ -63,6 +63,15 @@
   --kind-person: #e87ba4;
   --kind-repo: #4a3aa7;
   --kind-other: #8a8985;
+  --key-top: oklch(1 0 0);
+  --key-bottom: oklch(0.93 0.004 250);
+  --key-border: oklch(0.85 0.006 250);
+  --key-edge: oklch(0.72 0.01 250);
+  --key-primary-top: oklch(0.32 0.02 258);
+  --key-primary-bottom: oklch(0.2 0.02 258);
+  --key-primary-border: oklch(0.25 0.02 258);
+  --key-primary-edge: oklch(0.08 0.01 258);
+  --key-primary-text: oklch(0.98 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -98,8 +107,41 @@
 }
 
 .dark {
-  --time: oklch(0.74 0.16 22);
-  --time-foreground: oklch(0.145 0 0);
+  color-scheme: dark;
+  /* Slate: every neutral carries a little blue (hue ≈ 258) so the surface reads as one material, not gray. */
+  --background: oklch(0.17 0.022 258);
+  --foreground: oklch(0.95 0.008 250);
+  --card: oklch(0.2 0.024 258);
+  --card-foreground: oklch(0.95 0.008 250);
+  --popover: oklch(0.21 0.024 258);
+  --popover-foreground: oklch(0.95 0.008 250);
+  --primary: oklch(0.95 0.008 250);
+  --primary-foreground: oklch(0.17 0.022 258);
+  --secondary: oklch(0.27 0.026 258);
+  --secondary-foreground: oklch(0.95 0.008 250);
+  --muted: oklch(0.24 0.025 258);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.27 0.026 258);
+  --accent-foreground: oklch(0.95 0.008 250);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(0.31 0.028 258);
+  --input: oklch(0.29 0.027 258);
+  --ring: oklch(0.6 0.03 255);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.2 0.024 258);
+  --sidebar-foreground: oklch(0.95 0.008 250);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.95 0.008 250);
+  --sidebar-accent: oklch(0.27 0.026 258);
+  --sidebar-accent-foreground: oklch(0.95 0.008 250);
+  --sidebar-border: oklch(0.31 0.028 258);
+  --sidebar-ring: oklch(0.6 0.03 255);
+  --time: oklch(0.72 0.17 22);
+  --time-foreground: oklch(0.14 0.02 258);
   --kind-paper: #3987e5;
   --kind-tool: #d95926;
   --kind-technique: #199e70;
@@ -107,37 +149,16 @@
   --kind-person: #d55181;
   --kind-repo: #9085e9;
   --kind-other: #8a8985;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Keycaps: a lit top face, a darker bottom face, and the edge you press down onto. */
+  --key-top: oklch(0.4 0.03 258);
+  --key-bottom: oklch(0.3 0.028 258);
+  --key-border: oklch(0.47 0.032 258);
+  --key-edge: oklch(0.14 0.02 258);
+  --key-primary-top: oklch(1 0 0);
+  --key-primary-bottom: oklch(0.86 0.012 250);
+  --key-primary-border: oklch(0.98 0 0);
+  --key-primary-edge: oklch(0.55 0.02 255);
+  --key-primary-text: oklch(0.15 0.02 258);
 }
 
 @layer base {
@@ -241,40 +262,54 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Timecode keycap: a small tactile key. Quiet by default; the accent marks the live playhead and hover. */
+/* Timecode keycap: a small raised key. Quiet by default; the accent marks the live playhead and hover. */
 .timecode {
   display: inline-flex;
   align-items: center;
   height: 1.25rem;
   padding: 0 0.4rem;
   border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--background);
-  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 70%, transparent), 0 1px 0 0 var(--border);
+  border: 1px solid var(--key-border);
+  background: linear-gradient(to bottom, var(--key-top), var(--key-bottom));
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.14),
+    inset 0 -1px 0 0 rgb(0 0 0 / 0.25),
+    0 1.5px 0 0 var(--key-edge),
+    0 2px 4px -1px rgb(0 0 0 / 0.5);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 0.6875rem;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--muted-foreground);
-  transition: color 120ms, border-color 120ms, transform 80ms, box-shadow 80ms;
+  transition: color 120ms, border-color 120ms, transform 80ms, box-shadow 80ms, filter 120ms;
 }
 .timecode:hover {
   color: var(--time);
-  border-color: color-mix(in oklch, var(--time) 45%, var(--border));
+  filter: brightness(1.12);
 }
 .timecode:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 1px 0 rgb(0 0 0 / 0.08);
+  transform: translateY(1.5px);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+    inset 0 2px 3px 0 rgb(0 0 0 / 0.35);
 }
 .timecode[data-live="true"] {
   color: var(--time-foreground);
-  background: var(--time);
-  border-color: var(--time);
-  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.25), 0 1px 0 0 color-mix(in oklch, var(--time) 60%, black);
+  border-color: color-mix(in oklch, var(--time) 80%, white);
+  background: linear-gradient(to bottom, color-mix(in oklch, var(--time) 88%, white), var(--time));
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.35),
+    inset 0 -1px 0 0 rgb(0 0 0 / 0.2),
+    0 1.5px 0 0 color-mix(in oklch, var(--time) 55%, black),
+    0 2px 6px -1px color-mix(in oklch, var(--time) 60%, transparent);
 }
-.dark .timecode {
-  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 0 0 black;
+
+/* Inputs sit *into* the surface, so keys read as raised by contrast. */
+[data-slot="input"],
+[data-slot="textarea"],
+textarea {
+  box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
 }
 
 /* Reading text — the serif is for what you read, never for chrome. */

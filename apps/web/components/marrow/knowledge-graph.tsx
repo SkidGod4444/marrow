@@ -50,7 +50,9 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
       const t = byId.get(e.target);
       return s && t ? [{ source: s, target: t, edge: e }] : [];
     });
-    const labelPad = (d: SimNode) => (d.type === "item" ? Math.min(140, d.label.length * 3.2) : 0);
+    // Labels take horizontal room to the right of a node; reserve it in the collision radius so labels don't cover neighbours.
+    const smallGraph = ns.length <= 60;
+    const labelPad = (d: SimNode) => (d.type === "item" ? Math.min(140, d.label.length * 3.2) : smallGraph || d.degree >= 2 ? Math.min(110, d.label.length * 2.6) : 0);
     const sim = forceSimulation(ns)
       .force("link", forceLink<SimNode, SimLink>(ls).id((d) => d.id).distance((l) => 110 + 60 / Math.sqrt(l.edge.weight)).strength(0.5))
       .force("charge", forceManyBody().strength((d) => ((d as SimNode).type === "item" ? -420 : -220)))

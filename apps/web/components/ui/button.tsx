@@ -4,16 +4,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-[13px] font-medium whitespace-nowrap transition-[transform,box-shadow,background-color,border-color,color] duration-100 outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px active:not-aria-[haspopup]:shadow-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-[13px] font-medium whitespace-nowrap transition-[transform,box-shadow,background-color,border-color,color] duration-100 outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-[2px] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[inset_0_1px_0_0_rgb(255_255_255/0.16),0_1px_0_0_color-mix(in_oklch,var(--primary)_55%,black)] hover:bg-[color-mix(in_oklch,var(--primary),white_8%)] dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.35),0_1px_0_0_rgb(0_0_0/0.9)]",
+          "border-[var(--key-primary-border)] bg-[linear-gradient(to_bottom,var(--key-primary-top),var(--key-primary-bottom))] text-[var(--key-primary-text)] shadow-[inset_0_1px_0_0_rgb(255_255_255/0.9),inset_0_-1px_0_0_rgb(0_0_0/0.12),0_2px_0_0_var(--key-primary-edge),0_3px_8px_-2px_rgb(0_0_0/0.6)] hover:brightness-[1.04] active:not-aria-[haspopup]:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.6),inset_0_2px_3px_0_rgb(0_0_0/0.18)]",
         outline:
-          "border-border bg-background bg-gradient-to-b from-background to-muted/60 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.85),0_1px_0_0_var(--border)] hover:to-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:from-input/40 dark:to-input/20 dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06),0_1px_0_0_black] dark:hover:to-input/40",
+          "border-[var(--key-border)] bg-[linear-gradient(to_bottom,var(--key-top),var(--key-bottom))] text-foreground shadow-[inset_0_1px_0_0_rgb(255_255_255/0.14),inset_0_-1px_0_0_rgb(0_0_0/0.25),0_2px_0_0_var(--key-edge),0_3px_6px_-2px_rgb(0_0_0/0.5)] hover:brightness-110 hover:text-foreground aria-expanded:brightness-110 active:not-aria-[haspopup]:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06),inset_0_2px_3px_0_rgb(0_0_0/0.35)]",
         secondary:
-          "border-border/80 bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_1px_0_0_var(--border)] hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.05),0_1px_0_0_black]",
+          "border-[var(--key-border)] bg-[linear-gradient(to_bottom,var(--key-top),var(--key-bottom))] text-secondary-foreground shadow-[inset_0_1px_0_0_rgb(255_255_255/0.14),inset_0_-1px_0_0_rgb(0_0_0/0.25),0_2px_0_0_var(--key-edge),0_3px_6px_-2px_rgb(0_0_0/0.5)] hover:brightness-110 aria-expanded:brightness-110 active:not-aria-[haspopup]:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06),inset_0_2px_3px_0_rgb(0_0_0/0.35)]",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
