@@ -1,0 +1,60 @@
+# Local stack: Postgres (pgvector) + MinIO (S3 API) + the Marrow server.
+# Production on the EC2 box swaps `db`/`minio` for RDS + real S3 (see docs/DEPLOY.md) and adds Caddy for HTTPS.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: marrow
+      POSTGRES_PASSWORD: marrow
+      POSTGRES_DB: marrow
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marrow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: marrow
+      MINIO_ROOT_PASSWORD: marrowmarrow
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "mc alias set local http://minio:9000 marrow marrowmarrow && mc mb --ignore-existing local/marrow"
+
+  server:
+    build: { context: ., dockerfile: docker/server.Dockerfile }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://marrow:marrow@db:5432/marrow
+      STORAGE_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: marrow
+      S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: marrow
+      AWS_SECRET_ACCESS_KEY: marrowmarrow
+      WORK_DIR: /data/work
+    ports: ["3001:3001"]
+    volumes: [workdata:/data]
+    depends_on:
+      db: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
+  miniodata:
+  workdata:

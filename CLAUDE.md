@@ -1,0 +1,82 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## The PRD is the source of truth
+
+**Read `docs/PRD.mdx` before doing anything.** It is a build-ready spec written for an autonomous coding agent; everything in it is normative. Then read **`docs/STACK.md`** — the PRD deliberately leaves every technology choice as a `STACK:*` placeholder and says *"Do not pick a stack yourself"*; `docs/STACK.md` is where the owner resolves them. **If `docs/STACK.md` still has unresolved rows, stop and ask the owner — do not scaffold code in a guessed stack.** Where the PRD and stack sheet are silent, choose the simplest option that meets the acceptance criteria (PRD §14) and **log it in `DECISIONS.md`** (date, decision, why, PRD section). This file summarises the PRD; if they disagree, the PRD wins and this file gets corrected.
+
+## What Marrow is
+
+Marrow ingests long-form video (YouTube first; later podcasts via RSS, uploads, captured posts, newsletters, papers) into a canonical **video document** — word-timestamped transcript + captioned keyframes + article + references + language pack — organised into topic-scoped **namespaces** that grow from subscribed playlists/channels. Three surfaces sit on top: a **research chat agent** (per-video and per-namespace, every answer cited `title @ MM:SS` with a deep link), a **reader** (2-hour podcast → 15-minute sectioned article), and an **MCP server + mirrored REST API** so external agents (Claude Code) can research over a namespace. **Novelty triage** tells the owner what is genuinely new in each incoming video relative to the corpus. Single owner, single API key, no multi-user, no live transcription, no self-hosted GPU inference (all ML via hosted APIs), and **never automate logins or scrape LinkedIn/X** — social content enters only via manual capture, newsletters, or RSS.
+
+## Repo state & build order
+
+Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. Check `DECISIONS.md` and `git log` to see which phase is in progress.
+
+1. **Phase 1 — Ingestion core.** CLI/endpoint ingests one YouTube URL into a namespace through pipeline stages 1–8. *Accept:* a 1-hr talk yields a valid document JSON with word-level timestamps, ≤120 captioned keyframes, article, references, segments in DB; re-running is idempotent; a failed stage resumes without redoing earlier ones.
+2. **Phase 2 — MCP + REST.** All §8 tools live; Claude Code connects via a config snippet documented in the README. *Accept:* `search` over a 10-video namespace returns timestamped deep-linked segments; `get_frame` returns an image; `lookup_entity` returns cross-video mentions.
+3. **Phase 3 — Reader + per-video chat (web app).** Library → item page with reader and chat tabs; citations seek the embedded YouTube iframe (`seekTo`); "what's on screen now" sends playback position to chat.
+4. **Phase 4 — Namespaces at scale.** Playlist/channel subscriptions, cron polling, watch inbox (default landing page), novelty triage, namespace summary, namespace-level chat (≥2 distinct video citations for a cross-video question).
+5. **Phase 5 — Capture + text sources.** `POST /capture`, share-sheet shortcut doc, inbound email, RSS, `export_markdown` (must render in Obsidian with clickable timestamps).
+6. **Phase 6 — Language mode + review queue.** Podcast episode → ≥10 expressions with playable exact-span audio clips; spaced review (2d/7d/30d) can be phase-gated.
+
+## Commands
+
+Package manager is **bun** (Turborepo over bun workspaces) — never npm/pnpm. Run everything from the repo root so `.env` loads. Prerequisites on the dev machine: `ffmpeg`, `yt-dlp` (both via Homebrew; the Docker image bundles them).
+
+| Task | Command |
+|---|---|
+| Typecheck all packages | `bun run typecheck` |
+| Tests (Vitest, PGlite in-memory, fake providers — no network) | `bun run test` · single file: `bunx vitest run packages/core/src/pipeline/runner.test.ts` · watch: `bun run test:watch` |
+| Lint | `bun run lint` |
+| CLI (runs the pipeline in-process) | `bun run cli ns create <name>` · `bun run cli ingest <url> --ns <name> [--force] [--stages a,b]` · `bun run cli job <job_id>` · `bun run cli doc <item_id>` |
+| Server (REST + job runner; MCP from Phase 2) | `bun run server` · `bun run server:dev` (watch) |
+| DB migration after editing `packages/core/src/db/schema.ts` | `bun run db:generate` (then hand-add any `CREATE EXTENSION` lines) · `bun run db:migrate` |
+| Full local stack | `docker compose up --build` (Postgres+pgvector, MinIO, server on :3001) |
+
+Config is env-only (`.env.example` documents every variable). No `DATABASE_URL` → PGlite at `.marrow/pglite/`; `STORAGE_DRIVER=local` → files under `.marrow/storage/`. Live OpenAI tests are gated behind `LIVE=1`.
+
+## Layout
+
+```
+packages/core/src/
+  config.ts            zod-parsed env → Config
+  document.ts          VideoDocument zod schema (PRD §4.3) + storage key helpers
+  db/schema.ts         Drizzle tables (PRD §12); db/index.ts picks postgres-js or PGlite; db/migrations/
+  storage/             Storage interface: S3 (AWS or MinIO) and local filesystem drivers
+  openai/              whisper-1 transcription, Responses-API structured generation (+web_search), vision, embeddings, PRICING + UsageTracker
+  media/               ffmpeg (audio extract, silencedetect chunk planning, scene keyframes, pruning) and yt-dlp wrappers
+  pipeline/            types (Providers = everything mockable), runner (checkpointed stage loop), stages/*, segmenter, prompts, context, testkit (fakes)
+  services/            namespaces, ingest (idempotency), jobs, items, events, entities (entity index upsert)
+  queue.ts             JobQueue: pg-boss (real Postgres) or in-process serial fallback
+apps/server/src/       app.ts (Hono routes), index.ts (boot: db + storage + queue + Bun.serve), cli.ts
+docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose.yml at root
+```
+
+## Architecture — the parts that span multiple files
+
+**The video document is the canonical artifact; the DB holds references + retrieval units.** One JSON document per media item lives in object storage at `documents/{item}.json` (shape in PRD §4.3: `chapters`, `speakers`, `transcript[]` with `words[]`, `frames[]` with caption + OCR, `references[]`, `article`, `language_pack`, `pipeline.{version, stages_completed}`, plus `novelty` once triaged). Postgres-side tables (PRD §12): `namespaces`, `sources`, `items`, `segments`, `entities`, `mentions`, `notes`, `events`, `jobs`. Object storage layout is fixed: `raw/{item}/`, `audio/{item}.m4a`, `frames/{item}/{t}.jpg`, `clips/{item}/{n}.m4a`, `documents/{item}.json`. **Word-level timestamps are mandatory** (they drive clip cutting and precise seeking) — if the STT provider only offers them on one model, use that model.
+
+**The pipeline is a checkpointed, idempotent job per item** (PRD §5). Stages, in order: fetch (yt-dlp + ffmpeg → mono low-bitrate audio, silence-split if over the STT file cap) → transcribe (word timestamps, language auto-detect and stored) → diarize (conditional on multi-speaker heuristics; `speakers: [S1]` fallback keeps the field) → frames (scene-detect keyframes, cap ~120/hr, skipped for audio-only) → vision (cheap VLM: one-line caption + OCR per frame) → article (cheap LLM: sections with headings at topic shifts, timestamps preserved per section, summary, takeaways) → enrichment (references resolved via web search, claims with stance, entity index update) → segment + embed + FTS → language pass (only namespaces flagged `language_learning`) → novelty triage (only when namespace has ≥5 items). Text source types (`captured_post`, `newsletter`, `paper`, `note`) skip transcription/vision. Each stage records `state`/`error` in `jobs` so a failure resumes at the failed stage; the pipeline is idempotent per `(source_url, namespace)`, and re-ingesting bumps `pipeline.version` and replaces derived artifacts. **Every stage must log its API spend to `jobs`** — target ≤ $1 per ingested hour-long video; cheap-tier models for every pipeline pass, the strong model only for interactive chat.
+
+**Segments are the retrieval unit** (PRD §4.4): ~200–400 tokens, split on sentence + chapter boundaries, carrying `t_start`/`t_end`, `frame_ids` on screen during the span, an embedding, and an FTS vector. Text sources produce segments without timestamps; owner notes are stored as segments (`source_type: note`) so they search alongside transcripts. **Every retrieval result must carry a deep link** — `{source_url}&t={int(t_start)}s` for YouTube.
+
+**Retrieval is hybrid from day one** (PRD §8): vector + BM25/FTS merged with RRF, over-fetch 4k then rerank to k (cheap LLM rerank or score fusion). Pure vector misses exact paper/repo names. `search` must accept a `source_type` filter and return text, title, `t_start`, deep link, and frame captions.
+
+**One service layer, two skins.** REST and MCP (stdio + HTTP transport) expose the same functions — `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns MCP image content), `lookup_entity`, `list_items`, `ingest`, `job_status`, `capture`, `export_markdown` (full table in PRD §8). Implement each once in the service layer; the REST routes and MCP tool handlers are thin adapters. Auth is one owner API key in a header.
+
+**Chat context is built for prompt caching** (PRD §6.1). Per-video: a static prefix of the full timestamped transcript as `[MM:SS] text` lines + metadata/chapters + the frame list *as text* (timestamps + captions, never images) + references; tools `view_frame(t)` (loads the image on demand), `web_search`, `fetch_url`. Per-namespace: namespace summary + entity index headline, with the §8 retrieval tools. Keep the static prefix first and stable so provider prompt caching hits.
+
+**Enrichment feeds three cross-item structures** (PRD §9–10): the per-namespace **entity index** (canonical name, aliases, resolved URL, mentions with item/t/quote); **claims** `{entity?, claim_text, stance ∈ supports|opposes|neutral, item, t}` so `lookup_entity` can surface disagreements across videos; and the **namespace summary**, regenerated every 3 ingests and injected into namespace chat and `list_namespaces`. **Novelty triage** retrieves top-matching existing segments per new chapter/section, has an LLM classify each as `known` vs `new` with pointers, and stores the verdict on the document for the inbox card.
+
+**Events are logged from day one, with no consumer.** `{item, event ∈ ingested|read|chatted|skipped|expression_saved, ts}` — the substrate for a future retention/quiz loop. Wire it everywhere the corresponding action happens.
+
+## Hard constraints to keep in mind while coding
+
+- Never pick or change a technology the stack sheet doesn't name; never add a second option for something it already resolves.
+- No scraping or login automation against third-party platforms — `POST /capture` does a plain server-side fetch of a public URL, nothing more.
+- Frames: keyframes only on visual change, ≤ ~120 per hour; skip the stage for audio-only sources.
+- Audio must fit the STT provider's file cap — chunk on `silencedetect` boundaries, never mid-word.
+- The pipeline never calls the strong chat model.
+- Owner-facing open questions (PRD §15: diarization in v1, auto-ingest YouTube links from captures, final licence) are decisions for the owner — surface them, don't resolve them silently.

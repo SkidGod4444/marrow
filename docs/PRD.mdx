@@ -1,0 +1,319 @@
+# PRD — Marrow
+
+**Video-first research knowledge platform**
+Owner: Saidev Dhal · Status: Draft v1 · Date: 2026-08-27
+
+> Note to coding agent: The tech stack (languages, frameworks, DB, hosting) will be
+> supplied separately by the owner. Wherever this document says `STACK:*`, treat it
+> as a placeholder to be resolved from the owner's stack choices. Do not pick a
+> stack yourself. Everything else in this document is normative.
+
+---
+
+## 1. Problem
+
+Most useful technical knowledge is trapped in long-form video (talks, lectures,
+podcasts). Videos are slow to consume, often not self-explanatory (creators
+name-drop papers/tools without explaining), impossible to search, and impossible
+to cite. Ideas also arrive scattered across social posts and newsletters and rot
+in bookmarks.
+
+Marrow ingests videos (and text content) into structured, timestamped,
+searchable knowledge, then exposes it through three surfaces: a chat research
+agent, a reader, and an API/MCP server so external agents (Claude Code) can do
+extensive research over topic-scoped knowledge bases.
+
+## 2. Goals
+
+1. Ingest any YouTube video/playlist (later: podcasts via RSS, uploaded files,
+   captured posts) into a canonical **video document**: aligned transcript +
+   keyframes + enrichment.
+2. Organize everything into **namespaces** (topic-scoped knowledge bases) that
+   grow automatically from subscribed playlists/channels.
+3. Let the owner **chat with a research agent** about a single video or across a
+   whole namespace, with timestamp-cited answers and the ability to look at
+   frames and follow references outward (web, papers).
+4. Render podcasts/talks as **readable articles** (reader mode) so a 2-hour
+   episode becomes a 15-minute read.
+5. Support **language learning** extraction from natural spoken content.
+6. Expose the KB to external agents via an **MCP server** and mirrored REST API.
+7. Reduce watch time via **novelty triage**: tell the owner what's genuinely new
+   in each incoming video relative to the namespace.
+
+## 3. Non-goals (v1)
+
+- No scraping of LinkedIn/X. Social content enters only via manual capture
+  (share-sheet/endpoint) or newsletters/RSS. Never automate logins to third-party
+  platforms.
+- No real-time/live transcription.
+- No multi-user, auth beyond a single-owner API key, or social features.
+- No mobile app (share-sheet shortcut hits the capture endpoint; that's enough).
+- No self-hosted GPU inference. All ML via hosted APIs.
+
+## 4. Core concepts
+
+### 4.1 Namespace
+A named, topic-scoped knowledge base (e.g. `sim-to-real`, `kv-cache`,
+`english-podcasts`, `ideas`). All content belongs to exactly one namespace.
+Namespaces have: name, description, auto-generated summary, entity index,
+subscribed sources (playlists/channels/RSS).
+
+### 4.2 Source item
+Anything ingested. `source_type ∈ {youtube_video, podcast_episode, uploaded_media,
+captured_post, newsletter, paper, note}`. Media types go through the full
+pipeline; text types skip transcription/vision.
+
+### 4.3 Video document (canonical artifact)
+One JSON document per media item, stored in object storage; the DB holds
+references + segments. Shape:
+
+```json
+{
+  "id": "vid_...",
+  "namespace_id": "ns_...",
+  "source_type": "youtube_video",
+  "source_url": "https://youtube.com/watch?v=...",
+  "title": "...", "channel": "...", "published_at": "...",
+  "duration_s": 3600,
+  "chapters": [{"title": "...", "t_start": 0, "t_end": 421}],
+  "speakers": [{"id": "S1", "label": "Host"}],
+  "transcript": [
+    {"t_start": 12.4, "t_end": 18.9, "speaker": "S1", "text": "...",
+     "words": [{"w": "...", "t": 12.4}]}
+  ],
+  "frames": [
+    {"t": 1423.0, "s3_key": "frames/vid_.../1423.jpg",
+     "caption": "Slide: PPO loss curves, x-axis training steps",
+     "ocr_text": "..."}
+  ],
+  "references": [
+    {"kind": "paper", "raw_mention": "the Tobin et al. paper",
+     "resolved_url": "https://arxiv.org/abs/1703.06907", "t": 1500.2}
+  ],
+  "article": {"summary": "...", "takeaways": ["..."], "sections": [
+    {"heading": "...", "t_start": 0, "body_md": "..."}]},
+  "language_pack": {"expressions": [
+    {"text": "cut corners", "kind": "idiom", "t_start": 88.1, "t_end": 90.4,
+     "explanation": "...", "clip_s3_key": "clips/..."}]},
+  "pipeline": {"version": 1, "stages_completed": ["transcribe", "..."]}
+}
+```
+
+Word-level timestamps are required (they enable audio clip cutting for language
+mode and precise seeking). If the chosen transcription API only returns
+word-level granularity on a specific model, use that model.
+
+### 4.4 Segment (retrieval unit)
+Aligned chunk derived from the document: `t_start`, `t_end`, `text` (~200–400
+tokens, split on sentence + chapter boundaries), `frame_ids` on screen during
+the span, embedding, FTS index. Text sources produce segments without
+timestamps. **Every retrieval result must carry a deep link**
+(`{source_url}&t={int(t_start)}s` for YouTube).
+
+## 5. Ingestion pipeline
+
+Runs as an async job queue (STACK:queue). One job per item, stages checkpointed
+so a failed stage resumes without redoing earlier ones. Stages:
+
+1. **Fetch** — `yt-dlp`: media + metadata + chapters. Extract audio with ffmpeg
+   to mono, low-bitrate m4a/opus (must fit the transcription API file cap;
+   chunk on silence boundaries via ffmpeg `silencedetect` if not).
+2. **Transcribe** — hosted STT API (STACK:stt), word timestamps on. Language
+   auto-detect; store detected language.
+3. **Diarize** (conditional) — only when metadata/heuristics suggest multi-speaker
+   (podcast, interview, panel). STACK:diarization (hosted API or skip in v1 with
+   a `speakers: [S1]` fallback; keep the field in the schema regardless).
+4. **Frames** — ffmpeg scene detection (or PySceneDetect) → keyframes only on
+   visual change; cap ~120/hr. Skip entirely for audio-only sources.
+5. **Vision** — cheap hosted VLM (STACK:vlm_cheap) per keyframe: one-sentence
+   caption + OCR of on-screen text.
+6. **Article pass** — cheap LLM (STACK:llm_cheap): clean transcript → readable
+   article (paragraphs, headings at topic shifts, filler removed, timestamps
+   preserved per section), summary, takeaways.
+7. **Enrichment pass** — cheap LLM: extract references (papers/tools/repos/people
+   name-dropped without explanation), resolve via web search to URLs; extract
+   claims (see §9); update namespace entity index.
+8. **Segment + embed** — build segments, embed (STACK:embeddings), index FTS.
+9. **Language pass** (only for namespaces flagged `language_learning: true`) —
+   extract idioms/phrasal verbs/collocations with word-timestamped spans; cut
+   audio clips with ffmpeg; store clip keys.
+10. **Novelty triage** (only when namespace has ≥ N existing items, N=5) — see §10.
+
+Pipeline is idempotent per (source_url, namespace). Re-ingesting bumps
+`pipeline.version` and replaces derived artifacts.
+
+## 6. Surfaces
+
+### 6.1 Research chat (per-video and per-namespace)
+- **Per-video:** assemble agent context = full timestamped transcript
+  (`[MM:SS] text` lines), metadata + chapters, frame list as text (timestamps +
+  captions, NOT images), references section from enrichment. Tools:
+  `view_frame(t)` (loads image into context), `web_search`, `fetch_url`,
+  `get_segment_audio(t1,t2)` (optional, later).
+- **Per-namespace:** agent context = namespace summary + entity index headline;
+  tools = the retrieval tools of §8. Answers must cite `title @ MM:SS` with deep
+  links.
+- Transcript prefix is static → structure prompts for provider prompt caching.
+
+### 6.2 Reader
+Renders `article` from the document: summary + takeaways on top, sectioned body,
+timestamp margin-links that deep-link to the video position. Inline "ask about
+this section" affordance that opens chat pre-seeded with that section's span.
+
+### 6.3 Language mode
+Per-episode expression list from `language_pack`: expression, explanation, play
+button for the exact audio clip, "jump to moment" link. Simple review queue:
+expressions the owner marks "learn" get resurfaced (spaced: 2d/7d/30d) as recall
+prompts. Keep v1 minimal: list + clips + jump links; the review queue can be
+phase-gated.
+
+### 6.4 Watch inbox
+Subscribed playlists/channels are polled (cron, STACK:cron) for new items → auto
+ingest → inbox entry showing: title, summary, novelty verdict (§10), actions
+[Read] [Chat] [Skip]. Skip archives. This is the default landing page.
+
+## 7. Capture (text content)
+
+- `POST /capture {namespace, url?, text?, author?, note?}` with API key.
+  If `url` present, fetch page text server-side (plain fetch, no login, no
+  automation against platforms). Store as `captured_post` document → enrichment
+  → segments.
+- If a captured item links to a YouTube video, offer/auto-queue that video for
+  full ingestion into the same namespace (config flag per namespace).
+- Newsletter channel: a dedicated inbound email address (STACK:inbound_email);
+  each mail becomes a `newsletter` document in a configured namespace.
+- RSS: per-namespace feed subscriptions for podcasts/blogs; podcast enclosures
+  go through the full media pipeline.
+
+## 8. API + MCP server
+
+One service layer, two skins. REST (STACK:api) and MCP (stdio + HTTP transport)
+expose the same functions:
+
+| Tool / endpoint | Behavior |
+|---|---|
+| `list_namespaces()` | names, descriptions, item counts, summaries |
+| `search(namespace, query, k=8)` | hybrid retrieval: vector + BM25/FTS, merged (RRF), over-fetch 4k then rerank to k (cheap LLM rerank or score fusion). Returns segments: text, title, `t_start`, deep link, frame captions |
+| `get_context(segment_id, window_s=120)` | surrounding transcript text |
+| `get_video_document(video_id)` | full document (transcript may be truncated by arg) |
+| `get_frame(segment_id | frame_id)` | keyframe image (MCP image content) |
+| `lookup_entity(namespace, name)` | entity record: mentions across items with timestamps, claims + stances (§9) |
+| `list_items(namespace, status?)` | items with ingest status |
+| `ingest(namespace, url)` | enqueue ingestion, return job id |
+| `job_status(job_id)` | pipeline stage progress |
+| `capture(...)` | §7 |
+| `export_markdown(video_id | namespace_id)` | clean markdown w/ timestamp links (for Obsidian/Notion/reports) |
+
+Auth: single owner API key (header). MCP server config snippet documented in the
+README for Claude Code.
+
+**Retrieval quality requirements:** hybrid from day one (pure vector misses
+exact terms like paper/repo names); every result carries timestamp + deep link;
+`search` must accept `source_type` filter.
+
+## 9. Enrichment details
+
+- **Entity index (per namespace):** entities (paper/tool/repo/person/technique)
+  with: canonical name, aliases, resolved URL, mention list (item, t, quote).
+- **Claims:** during enrichment, extract notable claims as
+  `{entity?, claim_text, stance ∈ {supports, opposes, neutral}, item, t}`.
+  `lookup_entity` surfaces agreements AND disagreements across the corpus
+  ("A claims essential @12:10; B argues it's a crutch @22:10").
+- **Paper bridging:** resolved arxiv/paper links can be ingested as `paper`
+  documents into the same namespace (flag per namespace; default off in v1,
+  schema ready).
+- **Namespace summary:** regenerated after every M=3 ingests: what the corpus
+  covers, recurring themes, notable disagreements. Injected into namespace-chat
+  context and `list_namespaces`.
+
+## 10. Novelty triage
+
+When a new item finishes enrichment in a namespace with ≥5 items:
+1. Retrieve top-matching existing segments for each new chapter/section.
+2. LLM pass classifies each section: `known` (covered by corpus) vs `new`
+   (genuinely novel), with pointers to what covers the known parts.
+3. Output verdict on the inbox card: "~70% overlaps existing corpus; new
+   material: 12:30–18:40 (actuator backlash compensation), 31:00 (disagrees
+   with X's approach)". Store as part of the document.
+
+## 11. Notes & activity events
+
+- **Notes:** owner can attach a timestamped note to any item
+  (`POST /items/{id}/notes {t?, text}`). Notes are stored as segments
+  (`source_type: note`) → searchable alongside transcripts.
+- **Events:** log `{item, event ∈ {ingested, read, chatted, skipped,
+  expression_saved}, ts}` from day one. No consumer in v1; this is the data
+  substrate for the future retention/quiz loop (owner's brain-tracker). Cheap to
+  wire now, painful to retrofit.
+
+## 12. Data model (minimum tables)
+
+- `namespaces(id, name, description, summary, flags jsonb, created_at)`
+- `sources(id, namespace_id, kind ∈ {playlist, channel, rss, email}, url, last_checked_at)`
+- `items(id, namespace_id, source_type, source_url, title, channel, status ∈
+  {queued, running, failed, ready}, document_key, novelty jsonb, published_at, created_at)`
+- `segments(id, item_id, namespace_id, t_start, t_end, text, frame_ids jsonb,
+  embedding vector, tsv fts)`
+- `entities(id, namespace_id, name, aliases jsonb, url, kind)`
+- `mentions(id, entity_id, item_id, t, quote, claim_text, stance)`
+- `notes(id, item_id, t, text, created_at)`
+- `events(id, item_id, kind, ts)`
+- `jobs(id, item_id, stage, state, error, updated_at)`
+
+Object storage layout: `raw/{item}/`, `audio/{item}.m4a`, `frames/{item}/{t}.jpg`,
+`clips/{item}/{n}.m4a`, `documents/{item}.json`.
+
+## 13. Cost guardrails
+
+Hosted-API budget per 1-hour video ≈ transcription $0.18–0.36 + vision ~$0.10
+(≤120 frames, cheap VLM) + LLM passes ~$0.20 + embeddings ≈ negligible → target
+**≤ $1/video ingested**. The pipeline must log per-item API spend to `jobs` so
+the owner can see cost per video and per namespace. Use cheap-tier models for
+all pipeline passes; reserve the strong model for interactive chat only.
+
+## 14. Build phases & acceptance criteria
+
+**Phase 1 — Ingestion core.**
+CLI/endpoint ingests one YouTube URL into a namespace end-to-end (stages 1–8).
+✅ Accept: given a 1-hr talk, produces a valid document JSON with word-level
+timestamps, ≤120 captioned keyframes, article, references, segments in DB;
+re-running is idempotent; failed stage resumes.
+
+**Phase 2 — MCP + REST.**
+All §8 tools live; Claude Code connects via documented config.
+✅ Accept: from Claude Code, `search` over a 10-video namespace returns
+timestamped, deep-linked segments; `get_frame` returns an image; `lookup_entity`
+returns cross-video mentions.
+
+**Phase 3 — Reader + per-video chat (web app).**
+Library → item page with reader and chat tabs; chat cites `MM:SS`, clicking
+seeks the embedded player (YouTube iframe API `seekTo`); "what's on screen now"
+sends playback position to chat.
+✅ Accept: 2-hr podcast readable as sectioned article with working timestamp
+links; per-video chat can pull a frame and answer with citations.
+
+**Phase 4 — Namespaces at scale.**
+Playlist/channel subscriptions + cron polling + watch inbox + novelty triage +
+namespace summary + namespace-level chat.
+✅ Accept: adding a playlist auto-ingests new uploads; inbox shows novelty
+verdicts; namespace chat answers a cross-video question with ≥2 distinct video
+citations.
+
+**Phase 5 — Capture + text sources.**
+`/capture`, share-sheet shortcut doc, inbound email, RSS, markdown export.
+✅ Accept: sharing a post URL from phone lands it searchable in a namespace in
+<1 min; `export_markdown` renders in Obsidian with clickable timestamps.
+
+**Phase 6 — Language mode + review queue.** Per §6.3.
+✅ Accept: podcast episode yields ≥10 expressions with playable exact-span clips.
+
+Phases 1→2→3 strictly ordered; 4–6 may interleave after 3.
+
+## 15. Open questions (owner to resolve)
+
+1. ~~Final name~~ — decided: **Marrow**. Set repo/org/domain before Phase 2 README.
+2. Tech stack sheet resolving all `STACK:*` placeholders.
+3. Diarization in v1 or deferred (schema is ready either way).
+4. Auto-ingest linked YouTube videos from captured posts: default on or off?
+5. License: PolyForm Noncommercial vs AGPL-3.0 vs BSL (copyright entity:
+   OpenHorizon Labs Pvt Ltd vs personal) — decide before the repo goes public.
