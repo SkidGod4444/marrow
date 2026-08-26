@@ -1,7 +1,6 @@
 "use client";
 
-import { BookOpenText, Crosshair } from "lucide-react";
-import Link from "next/link";
+import { Crosshair } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { PresentedDocument } from "@/lib/api";
@@ -48,10 +47,6 @@ export function Transcript({ doc }: { doc: PresentedDocument }) {
           <Button variant={follow ? "secondary" : "outline"} size="sm" aria-pressed={follow} onClick={() => setFollow((f) => !f)} title={follow ? "Following the playhead — scroll to read freely" : "Jump to the playhead and keep following it"}>
             <Crosshair />
             {follow ? "Following" : "Follow playhead"}
-          </Button>
-          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${doc.id}/read`} />}>
-            <BookOpenText />
-            Read as text
           </Button>
         </div>
       </div>

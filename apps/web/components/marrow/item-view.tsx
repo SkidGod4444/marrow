@@ -25,7 +25,7 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
       <div className={`grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10 ${className}`}>
         {/* Left pane scrolls on its own (player stays near the top; long descriptions scroll under it). */}
         <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
-          <PlayerFrame />
+          <PlayerFrame frames={doc.frames} />
           {doc.description.trim() && <Description text={doc.description} />}
           {doc.chapters.length > 0 && (
             <div className="space-y-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Play, RotateCcw } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PlayerControls } from "./player-controls";
 
@@ -63,6 +64,9 @@ export type PlayerApi = {
   duration: number;
   playing: boolean;
   buffering: boolean;
+  /** Has played at least once (poster shown until then). */
+  started: boolean;
+  ended: boolean;
   muted: boolean;
   rate: number;
   ready: boolean;
@@ -95,23 +99,55 @@ export function youtubeId(url: string): string | null {
 
 const HostContext = createContext<{ hostRef: React.RefObject<HTMLDivElement | null>; frameRef: React.RefObject<HTMLDivElement | null>; videoId: string | null } | null>(null);
 
-/** The visible player: video area (click = play/pause, double-click = fullscreen) + our control bar. */
-export function PlayerFrame({ className = "" }: { className?: string }) {
+export type FrameRef = { id: string; t: number };
+
+/**
+ * The visible player: video area + our control bar. YouTube's own chrome (title strip, share, "More videos",
+ * "Watch on YouTube") only appears on the poster, paused and ended states — we cover those with our own layers
+ * (thumbnail before first play; the nearest keyframe, dimmed, when paused/ended), and our transparent overlay
+ * keeps hover away from the iframe while playing.
+ */
+export function PlayerFrame({ className = "", collapsed = false, frames = [] }: { className?: string; collapsed?: boolean; frames?: FrameRef[] }) {
   const host = useContext(HostContext);
-  const player = usePlayer();
+  const p = usePlayer();
   if (!host) throw new Error("PlayerFrame must be used inside <PlayerProvider>");
+  const poster = host.videoId ? `https://i.ytimg.com/vi/${host.videoId}/hqdefault.jpg` : null;
+  const still = (() => {
+    if (!frames.length) return poster;
+    const nearest = frames.reduce((b, f) => (Math.abs(f.t - p.currentTime) < Math.abs(b.t - p.currentTime) ? f : b));
+    return `/api/marrow/frames/${nearest.id}`;
+  })();
+  const showPoster = Boolean(host.videoId) && !p.started; // covers cued + initial buffering (YouTube shows its chrome there)
+  const showPaused = Boolean(host.videoId) && p.started && !p.playing && !p.buffering;
+  const loading = Boolean(host.videoId) && !p.started && p.buffering;
+
   return (
     <div ref={host.frameRef} className={`group/player flex flex-col overflow-hidden rounded-lg border border-border/70 bg-black [&:fullscreen]:rounded-none [&:fullscreen]:border-0 ${className}`}>
-      <div className="relative aspect-video w-full [&:fullscreen]:flex-1 [&>div]:size-full [&_iframe]:size-full">
+      {/* `collapsed` hides the picture but keeps the iframe mounted, so audio and the control bar keep working. */}
+      <div className={`relative w-full [&:fullscreen]:flex-1 [&>div]:size-full [&_iframe]:size-full ${collapsed ? "h-0" : "aspect-video"}`}>
         <div ref={host.hostRef} className="size-full" />
         {host.videoId ? (
-          <button
-            type="button"
-            aria-label={player.playing ? "Pause" : "Play"}
-            onClick={player.toggle}
-            onDoubleClick={player.fullscreen}
-            className="absolute inset-0 cursor-pointer bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          />
+          <>
+            {(showPoster || showPaused) && (
+              <div className="absolute inset-0 bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {(showPoster ? poster : still) && <img src={(showPoster ? poster : still)!} alt="" className={`size-full object-cover ${showPaused ? "opacity-40" : "opacity-90"}`} draggable={false} />}
+              </div>
+            )}
+            <button
+              type="button"
+              aria-label={p.playing ? "Pause" : p.ended ? "Replay" : "Play"}
+              onClick={p.ended ? () => p.seekTo(0, true) : p.toggle}
+              onDoubleClick={p.fullscreen}
+              className="absolute inset-0 flex cursor-pointer items-center justify-center bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              {(showPoster || showPaused) && (
+                <span className="flex size-16 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-[0_8px_30px_rgb(0_0_0/0.6)] backdrop-blur-sm transition-transform group-hover/player:scale-105">
+                  {loading ? <span className="size-6 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : p.ended ? <RotateCcw className="size-6" /> : <Play className="ml-1 size-7" fill="currentColor" />}
+                </span>
+              )}
+            </button>
+          </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">No embeddable player for this source</div>
         )}
@@ -130,6 +166,8 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [muted, setMuted] = useState(false);
   const [rate, setRateState] = useState(1);
   const pendingSeek = useRef<{ t: number; play: boolean } | null>(initialT !== null ? { t: initialT, play: false } : null);
@@ -164,7 +202,11 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
           onStateChange: (e: { data: number }) => {
             setPlaying(e.data === YT.PlayerState.PLAYING);
             setBuffering(e.data === YT.PlayerState.BUFFERING);
-            if (e.data === YT.PlayerState.PLAYING) setDuration(playerRef.current?.getDuration() ?? 0);
+            setEnded(e.data === YT.PlayerState.ENDED);
+            if (e.data === YT.PlayerState.PLAYING) {
+              setStarted(true);
+              setDuration(playerRef.current?.getDuration() ?? 0);
+            }
           },
           onPlaybackRateChange: (e: { data: number }) => setRateState(e.data),
         },
@@ -232,8 +274,8 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
   }, []);
 
   const api = useMemo<PlayerApi>(
-    () => ({ seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, muted, rate, ready, hasVideo: Boolean(videoId) }),
-    [seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, muted, rate, ready, videoId],
+    () => ({ seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, hasVideo: Boolean(videoId) }),
+    [seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, videoId],
   );
   const hostValue = useMemo(() => ({ hostRef, frameRef, videoId }), [videoId]);
   return (

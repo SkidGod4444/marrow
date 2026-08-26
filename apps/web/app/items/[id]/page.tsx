@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowRight, ArrowUpRight, FileText } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { ItemView } from "@/components/marrow/item-view";
 import { api } from "@/lib/api";
 import { fmtTs } from "@/lib/time";
@@ -59,10 +59,6 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
             source
             <ArrowUpRight className="size-3" />
           </a>
-          <Link href={`/items/${item.id}/read`} className="inline-flex items-center gap-1 hover:text-foreground">
-            <FileText className="size-3" />
-            text
-          </Link>
           <Link href={`/namespaces/${encodeURIComponent(item.namespaceId)}/graph?focus=${item.id}`} className="inline-flex items-center gap-0.5 hover:text-foreground">
             graph
             <ArrowRight className="size-3" />
