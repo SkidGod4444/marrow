@@ -106,27 +106,27 @@ Every push to `main` redeploys the web app; the API on EC2 updates with `git pul
 
 ## Part C — Continuous deployment
 
-The web app already redeploys on every push (Vercel). For the server, pick one:
+The web app redeploys on every push (Vercel). The server deploys itself: a systemd timer on the box checks `origin/main` every minute and, when it changed, runs `scripts/deploy-ec2.sh` (pull → rebuild image → restart → wait for `/health`). No inbound SSH is needed, so the security group's SSH rule stays on *My IP*.
 
-**Option 1 — push-based (GitHub Actions → SSH), immediate.** `.github/workflows/deploy-server.yml` runs whenever server-side files land on `main`, SSHes into the box and runs `scripts/deploy-ec2.sh` (pull, rebuild, restart, health-check). Setup:
-
-1. Make a dedicated deploy keypair on your laptop: `ssh-keygen -t ed25519 -f ~/.ssh/marrow-deploy -N "" -C marrow-deploy`.
-2. Authorise it on the box: `ssh -i marrow-key.pem ubuntu@<EIP> 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/marrow-deploy.pub`.
-3. GitHub → repo → *Settings → Secrets and variables → Actions*: `EC2_HOST` = the Elastic IP, `EC2_USER` = `ubuntu`, `EC2_SSH_KEY` = the contents of `~/.ssh/marrow-deploy` (the private key).
-4. Security group `marrow-web-sg`: the SSH (22) rule must accept GitHub's runners — change its source from *My IP* to `0.0.0.0/0` (key-only auth; password login is off on Ubuntu AMIs). If you'd rather not open 22 to the internet, use Option 2.
-5. Push to `main` (or *Actions → Deploy server to EC2 → Run workflow*). The run's log ends with `healthy at <sha>`.
-
-**Option 2 — pull-based (systemd timer on the box), no inbound SSH.** The box checks `origin/main` every minute and redeploys when it changed:
+One-time install on the box:
 
 ```bash
+cd ~/marrow && git pull
 sudo cp docker/marrow-deploy.service docker/marrow-deploy.timer /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now marrow-deploy.timer
-systemctl list-timers marrow-deploy.timer        # next run
-journalctl -u marrow-deploy.service -n 50        # last deploy log
+systemctl list-timers marrow-deploy.timer        # shows the next run
 ```
-Keep the SSH rule on *My IP*. Latency is up to a minute; logs live on the box instead of GitHub.
 
-Either way `scripts/deploy-ec2.sh` is what runs; you can also execute it by hand on the box. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR.
+Day to day:
+
+```bash
+journalctl -u marrow-deploy.service -n 50        # last deploy log ("deploying a1b2c3d → e4f5g6h" … "healthy at e4f5g6h")
+sudo systemctl start marrow-deploy.service       # deploy right now instead of waiting a minute
+FORCE=1 ./scripts/deploy-ec2.sh                  # rebuild even when nothing changed (e.g. after editing .env)
+```
+
+Only server-side changes matter to the box; a web-only commit rebuilds in a minute or two and restarts the same code. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR on GitHub.
 
 ## Things that bite first-time AWS users
 

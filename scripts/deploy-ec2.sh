@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy the latest `main` on the EC2 box: pull, rebuild the server image, restart, health-check.
-# Used by the GitHub Actions workflow (push-based) and by the systemd timer (pull-based); safe to run by hand.
+# Run by the systemd timer (docker/marrow-deploy.timer) every minute; safe to run by hand (FORCE=1 to rebuild regardless).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BRANCH="${DEPLOY_BRANCH:-main}"

@@ -145,3 +145,7 @@ The first RDS connection was rejected with `no pg_hba.conf entry … no encrypti
 ## 2026-08-27 — Server continuous deployment
 
 Vercel redeploys the web on push; the EC2 server gets `scripts/deploy-ec2.sh` (fetch, reset to origin/main, compose build/up, in-container health check) driven either by `.github/workflows/deploy-server.yml` (push-based over SSH with a dedicated deploy key; needs port 22 open to GitHub runners) or by `docker/marrow-deploy.timer` (pull-based systemd timer, no inbound SSH, ≤1 min latency). `ci.yml` runs lint/typecheck/tests on every push and PR. (docs/DEPLOY.md Part C)
+
+## 2026-08-27 — Server CD is pull-based only
+
+Owner chose the systemd timer over the GitHub Actions SSH deploy (no need to open port 22 to the internet for a one-person box). `deploy-server.yml` removed; `ci.yml` stays. (docs/DEPLOY.md Part C)
