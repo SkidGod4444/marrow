@@ -63,7 +63,8 @@ cp .env.example .env && nano .env
 Fill `.env` on the box:
 
 ```
-# Paste the RDS password as-is; the server percent-encodes special characters (? < : ( ) …) itself.
+# Paste the RDS password as-is; the server percent-encodes special characters (? < : ( ) …) itself,
+# and connects with TLS automatically (RDS requires it), verifying Amazon's CA bundle baked into the image.
 DATABASE_URL=postgres://marrow:<RDS_PASSWORD>@<RDS_ENDPOINT>:5432/marrow
 STORAGE_DRIVER=s3
 S3_BUCKET=marrow-<something-unique>
@@ -105,6 +106,7 @@ Every push to `main` redeploys the web app; the API on EC2 updates with `git pul
 
 - **Only the Elastic IP is stable** — if you stop/start the instance without an EIP, the public IP changes.
 - **Stopped instances still bill for EBS**; a terminated instance loses its disk (the corpus lives in RDS + S3, so that is fine — `.env` is the only thing to back up).
+- **"no pg_hba.conf entry … no encryption"** means the client connected without TLS — RDS requires it. The app does this automatically; if you see it on an old image, add `?sslmode=require` to `DATABASE_URL` and rebuild.
 - **RDS "Public access: No"** is correct; the box reaches it privately via the security group rule in step 3.5. If the server logs `ECONNREFUSED`/timeouts to the DB, that rule is missing.
 - **YouTube may throttle yt-dlp from EC2 IPs.** If ingests fail at the fetch stage, run `bun run cli ingest …` from your Mac with the same `DATABASE_URL`/S3 settings — the pipeline is the same code and writes to the same place.
 - When credits run out, the bill is the ~$40/mo above; nothing here needs a Savings Plan.

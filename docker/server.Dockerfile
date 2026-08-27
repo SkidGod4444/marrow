@@ -5,6 +5,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg python3 ca-certificates curl \
  && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
  && chmod a+rx /usr/local/bin/yt-dlp \
+ # Amazon RDS CA bundle so TLS to RDS is verified (DATABASE_SSL=auto picks it up when present).
+ && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

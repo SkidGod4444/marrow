@@ -35,6 +35,10 @@ export const ConfigSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v ? normalizeDatabaseUrl(v) : v)),
+  // TLS to Postgres: auto = encrypt for any non-local host (verify against DATABASE_SSL_CA when the file exists,
+  // e.g. the RDS bundle baked into the Docker image), require = encrypt without CA check, verify-full, off.
+  DATABASE_SSL: z.enum(["auto", "require", "verify-full", "off"]).default("auto"),
+  DATABASE_SSL_CA: z.string().default("/etc/ssl/certs/rds-global-bundle.pem"),
   PGLITE_DIR: z.string().default(".marrow/pglite"),
   PGLITE_MEMORY: bool.default(false),
 

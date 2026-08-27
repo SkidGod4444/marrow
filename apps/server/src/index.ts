@@ -1,14 +1,14 @@
-import { InProcessQueue, PgBossQueue, createDb, createProviders, createStorage, listPlaylistEntries, loadConfig, pollAllSources, runJob } from "@marrow/core";
+import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, listPlaylistEntries, loadConfig, pollAllSources, runJob } from "@marrow/core";
 import { createApp } from "./app.ts";
 import { realRetrieval } from "./deps.ts";
 
 // One process does everything (owner decision): REST API, MCP over HTTP, and the ingestion job runner.
 const config = loadConfig();
-const { db, driver, close: closeDb } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
+const { db, driver, close: closeDb } = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR, ssl: config.DATABASE_URL ? databaseSsl(config.DATABASE_URL, { mode: config.DATABASE_SSL, caPath: config.DATABASE_SSL_CA }) : undefined });
 const storage = createStorage(config);
 const providers = createProviders(config);
 
-const queue = config.DATABASE_URL ? new PgBossQueue(config.DATABASE_URL) : new InProcessQueue();
+const queue = config.DATABASE_URL ? new PgBossQueue(config.DATABASE_URL, databaseSsl(config.DATABASE_URL, { mode: config.DATABASE_SSL, caPath: config.DATABASE_SSL_CA })) : new InProcessQueue();
 await queue.start(async (jobId) => {
   await runJob({ db, storage, config, providers, log: (m) => console.log(`[job ${jobId}] ${m}`) }, jobId);
 });

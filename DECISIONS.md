@@ -133,3 +133,7 @@ Owner decision: deploy the web app on Vercel and keep the server/API/pipeline on
 ## 2026-08-27 — `DATABASE_URL` passwords are percent-encoded by the app
 
 The first RDS deploy failed with `Invalid URL`: the auto-generated master password contained `? < : ( )`. `normalizeDatabaseUrl` (applied in `loadConfig`) percent-encodes the password segment — using the last `@` as the host separator, which RDS guarantees — so the URL works as pasted and already-encoded values are unchanged. (docs/DEPLOY.md step 5)
+
+## 2026-08-27 — TLS to Postgres by default
+
+The first RDS connection was rejected with `no pg_hba.conf entry … no encryption`: RDS PostgreSQL requires TLS. `databaseSsl(url)` now returns TLS options for any non-local host (shared by postgres.js and pg-boss's pg): with the Amazon RDS CA bundle present (`/etc/ssl/certs/rds-global-bundle.pem`, downloaded into the server image) certificates are verified; otherwise encrypted-but-unverified (`DATABASE_SSL=require`). Local/compose hosts (`localhost`, `db`, `postgres`) stay plain. Override with `DATABASE_SSL=auto|require|verify-full|off`. (docs/DEPLOY.md)

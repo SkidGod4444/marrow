@@ -15,8 +15,8 @@ export interface JobQueue {
 
 export class PgBossQueue implements JobQueue {
   private boss: PgBoss;
-  constructor(connectionString: string) {
-    this.boss = new PgBoss({ connectionString, schema: "pgboss" });
+  constructor(connectionString: string, ssl?: false | { rejectUnauthorized: boolean; ca?: string }) {
+    this.boss = new PgBoss({ connectionString, schema: "pgboss", ...(ssl ? { ssl } : {}) });
   }
   async start(handler: JobHandler) {
     (this.boss as unknown as NodeJS.EventEmitter).on("error", (err: Error) => console.error("[pg-boss]", err));

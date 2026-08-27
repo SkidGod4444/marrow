@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { writeFile } from "node:fs/promises";
 import {
-  STAGE_NAMES, type StageName, createDb, createIngest, createNamespace, createProviders, createStorage, getItem,
+  STAGE_NAMES, type StageName, createDb, databaseSsl, createIngest, createNamespace, createProviders, createStorage, getItem,
   getJobStatus, getNamespace, listItems, listNamespaces, loadConfig, loadDocument, runJob,
 } from "@marrow/core";
 
@@ -39,7 +39,7 @@ if (values.help || !cmd) {
 }
 
 const config = loadConfig();
-const handle = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR });
+const handle = await createDb({ url: config.DATABASE_URL, pgliteDir: config.PGLITE_DIR, ssl: config.DATABASE_URL ? databaseSsl(config.DATABASE_URL, { mode: config.DATABASE_SSL, caPath: config.DATABASE_SSL_CA }) : undefined });
 const db = handle.db;
 const storage = createStorage(config);
 
