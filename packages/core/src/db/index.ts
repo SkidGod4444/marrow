@@ -40,11 +40,25 @@ export function databaseSsl(url: string, opts: { mode?: "auto" | "require" | "ve
 
 const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations", import.meta.url));
 
+/**
+ * Drop `sslmode`/`ssl`/`uselibpqcompat` from the URL: we pass TLS options explicitly, and `pg` lets URL parameters
+ * override them (a stray `?sslmode=require` then forces verification without our CA and fails with
+ * SELF_SIGNED_CERT_IN_CHAIN). `databaseSsl` reads `sslmode=disable` before this runs.
+ */
+export function stripSslParams(url: string): string {
+  const q = url.indexOf("?");
+  if (q === -1) return url;
+  const params = new URLSearchParams(url.slice(q + 1));
+  for (const k of ["sslmode", "ssl", "sslrootcert", "sslcert", "sslkey", "uselibpqcompat"]) params.delete(k);
+  const rest = params.toString();
+  return url.slice(0, q) + (rest ? `?${rest}` : "");
+}
+
 export async function createDb(opts: { url?: string; pgliteDir?: string; memory?: boolean; ssl?: SslOption }): Promise<DbHandle> {
   if (opts.url) {
     // RDS / docker-compose Postgres. `prepare: false` keeps us safe behind transaction poolers.
     const ssl = opts.ssl ?? databaseSsl(opts.url);
-    const client = postgres(opts.url, { prepare: false, max: 10, ...(ssl ? { ssl } : {}) });
+    const client = postgres(stripSslParams(opts.url), { prepare: false, max: 10, ...(ssl ? { ssl } : {}) });
     const db = drizzlePg(client, { schema });
     await migratePg(db, { migrationsFolder: MIGRATIONS_DIR });
     return { db: db as unknown as Db, driver: "postgres", close: () => client.end() };

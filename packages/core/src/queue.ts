@@ -1,4 +1,5 @@
 import { PgBoss } from "pg-boss";
+import { stripSslParams } from "./db/index.ts";
 
 export const INGEST_QUEUE = "ingest";
 
@@ -16,7 +17,7 @@ export interface JobQueue {
 export class PgBossQueue implements JobQueue {
   private boss: PgBoss;
   constructor(connectionString: string, ssl?: false | { rejectUnauthorized: boolean; ca?: string }) {
-    this.boss = new PgBoss({ connectionString, schema: "pgboss", ...(ssl ? { ssl } : {}) });
+    this.boss = new PgBoss({ connectionString: stripSslParams(connectionString), schema: "pgboss", ...(ssl ? { ssl } : {}) });
   }
   async start(handler: JobHandler) {
     (this.boss as unknown as NodeJS.EventEmitter).on("error", (err: Error) => console.error("[pg-boss]", err));

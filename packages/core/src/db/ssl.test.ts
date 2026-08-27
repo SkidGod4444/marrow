@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { databaseSsl } from "./index.ts";
+import { databaseSsl, stripSslParams } from "./index.ts";
 
 describe("databaseSsl", () => {
   it("stays plain for local and compose hosts", () => {
@@ -20,5 +20,18 @@ describe("databaseSsl", () => {
     const withCa = databaseSsl(rds, { caPath: `${process.cwd()}/package.json` }); // any readable file stands in for the bundle
     expect(withCa).toMatchObject({ rejectUnauthorized: true });
     expect((withCa as { ca?: string }).ca).toContain("marrow");
+  });
+});
+
+describe("stripSslParams", () => {
+  it("removes ssl-related query parameters and keeps the rest", () => {
+    expect(stripSslParams("postgres://u:p@h/db?sslmode=require")).toBe("postgres://u:p@h/db");
+    expect(stripSslParams("postgres://u:p@h/db?sslmode=verify-full&application_name=marrow&ssl=true")).toBe("postgres://u:p@h/db?application_name=marrow");
+    expect(stripSslParams("postgres://u:p@h/db")).toBe("postgres://u:p@h/db");
+  });
+  it("still honours sslmode=disable before stripping", () => {
+    const url = "postgres://u:p@x.rds.amazonaws.com/db?sslmode=disable";
+    expect(databaseSsl(url)).toBe(false);
+    expect(stripSslParams(url)).toBe("postgres://u:p@x.rds.amazonaws.com/db");
   });
 });

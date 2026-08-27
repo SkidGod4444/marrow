@@ -137,3 +137,7 @@ The first RDS deploy failed with `Invalid URL`: the auto-generated master passwo
 ## 2026-08-27 — TLS to Postgres by default
 
 The first RDS connection was rejected with `no pg_hba.conf entry … no encryption`: RDS PostgreSQL requires TLS. `databaseSsl(url)` now returns TLS options for any non-local host (shared by postgres.js and pg-boss's pg): with the Amazon RDS CA bundle present (`/etc/ssl/certs/rds-global-bundle.pem`, downloaded into the server image) certificates are verified; otherwise encrypted-but-unverified (`DATABASE_SSL=require`). Local/compose hosts (`localhost`, `db`, `postgres`) stay plain. Override with `DATABASE_SSL=auto|require|verify-full|off`. (docs/DEPLOY.md)
+
+## 2026-08-27 — SSL query parameters are stripped from `DATABASE_URL`
+
+`pg` (used by pg-boss) lets URL parameters override explicit options, so a leftover `?sslmode=require` forced verification without our CA bundle (`SELF_SIGNED_CERT_IN_CHAIN`). Both drivers now receive the URL with `sslmode`/`ssl`/`sslrootcert`/`uselibpqcompat` removed and take TLS settings only from `databaseSsl` (which still respects `sslmode=disable`). (docs/DEPLOY.md)
