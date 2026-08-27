@@ -63,6 +63,7 @@ cp .env.example .env && nano .env
 Fill `.env` on the box:
 
 ```
+# Paste the RDS password as-is; the server percent-encodes special characters (? < : ( ) …) itself.
 DATABASE_URL=postgres://marrow:<RDS_PASSWORD>@<RDS_ENDPOINT>:5432/marrow
 STORAGE_DRIVER=s3
 S3_BUCKET=marrow-<something-unique>

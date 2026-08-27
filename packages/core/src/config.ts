@@ -4,9 +4,37 @@ const bool = z
   .union([z.boolean(), z.string()])
   .transform((v) => (typeof v === "boolean" ? v : ["1", "true", "yes"].includes(v.toLowerCase())));
 
+/**
+ * Managed databases hand out passwords with `? < : ( ) #`… which break URL parsing (RDS auto-generated ones do).
+ * Percent-encode the password part so `postgres://user:p?ss@host/db` works as pasted; already-encoded values pass
+ * through unchanged. RDS forbids `@` and `/` in passwords, so the last `@` is the host separator.
+ */
+export function normalizeDatabaseUrl(url: string): string {
+  const schemeEnd = url.indexOf("://");
+  if (schemeEnd === -1) return url;
+  const scheme = url.slice(0, schemeEnd + 3);
+  const rest = url.slice(scheme.length);
+  const at = rest.lastIndexOf("@");
+  if (at === -1) return url;
+  const cred = rest.slice(0, at);
+  const colon = cred.indexOf(":");
+  if (colon === -1) return url;
+  const pass = cred.slice(colon + 1);
+  let decoded = pass;
+  try {
+    decoded = decodeURIComponent(pass);
+  } catch {
+    /* a literal % — treat as raw */
+  }
+  return `${scheme}${cred.slice(0, colon)}:${encodeURIComponent(decoded)}@${rest.slice(at + 1)}`;
+}
+
 export const ConfigSchema = z.object({
   // Database: real Postgres (RDS / docker-compose) when set, PGlite otherwise.
-  DATABASE_URL: z.string().optional(),
+  DATABASE_URL: z
+    .string()
+    .optional()
+    .transform((v) => (v ? normalizeDatabaseUrl(v) : v)),
   PGLITE_DIR: z.string().default(".marrow/pglite"),
   PGLITE_MEMORY: bool.default(false),
 

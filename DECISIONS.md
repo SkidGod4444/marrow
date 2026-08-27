@@ -129,3 +129,7 @@ The first real ingest failed at the frames stage: some YouTube encodes are full-
 ## 2026-08-27 — Web on Vercel, API on AWS
 
 Owner decision: deploy the web app on Vercel and keep the server/API/pipeline on AWS. Changes: `next.config.ts` skips `output: "standalone"` on Vercel and traces `apps/web/assets/**` (fonts + brand mark, now checked in) into the serverless functions for the OG routes; the `/api/marrow/*` proxy declares `maxDuration = 60` for streamed chat; `metadataBase` falls back to `VERCEL_PROJECT_PRODUCTION_URL`; `docker-compose.prod.yml` runs only `server` + `caddy` on `api.<domain>` (`MARROW_API_DOMAIN`); `docs/DEPLOY.md` has Part A (AWS API) and Part B (Vercel). Scrollbars are hidden globally by CSS on request. (docs/STACK.md hosting row)
+
+## 2026-08-27 — `DATABASE_URL` passwords are percent-encoded by the app
+
+The first RDS deploy failed with `Invalid URL`: the auto-generated master password contained `? < : ( )`. `normalizeDatabaseUrl` (applied in `loadConfig`) percent-encodes the password segment — using the last `@` as the host separator, which RDS guarantees — so the URL works as pasted and already-encoded values are unchanged. (docs/DEPLOY.md step 5)
