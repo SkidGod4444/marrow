@@ -16,7 +16,7 @@ export function NavLinks() {
     <nav aria-label="Primary" className="flex items-center gap-1 text-[13px]">
       {LINKS.map((l) => {
         // Namespace graphs live under /namespaces/…/graph; keep "Graph" lit there too.
-        const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href) || (l.href === "/graph" && /\/graph$/.test(pathname));
+        const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href) || (l.href === "/graph" && pathname.endsWith("/graph"));
         return (
           <Link
             key={l.href}
