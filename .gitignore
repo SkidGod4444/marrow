@@ -11,3 +11,7 @@ coverage
 apps/web/.next*
 apps/web/next-env.d.ts
 apps/web/.env.local
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/

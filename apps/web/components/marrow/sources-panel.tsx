@@ -26,7 +26,7 @@ export function SourcesPanel({ namespace, sources }: { namespace: string; source
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       const p = body.poll ?? (body.queued ? { found: body.found ?? 0, queued: body.queued } : null);
       if (p) toast.success(p.queued.length ? `${p.queued.length} new video${p.queued.length === 1 ? "" : "s"} queued` : "Nothing new", { description: `${p.found} entries checked` });
-      else toast.success("Done");
+      else toast.success(init.method === "DELETE" ? "Unfollowed" : "Done", init.method === "DELETE" ? { description: "Items already ingested stay in the library." } : undefined);
       router.refresh();
       return true;
     } catch (err) {

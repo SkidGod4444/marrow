@@ -230,15 +230,16 @@ export function createApp(deps: AppDeps) {
     const key = audioKey(item.id);
     if (!(await deps.storage.exists(key))) return c.json({ error: "no audio for this item" }, 404);
     const bytes = await deps.storage.get(key);
+    const type = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 ? "audio/wav" : "audio/ogg"; // RIFF → WAV (fakes), else Opus/OGG
     const range = c.req.header("range");
     const m = range?.match(/^bytes=(\d*)-(\d*)$/);
     if (m && (m[1] || m[2])) {
       const start = m[1] ? Number(m[1]) : Math.max(0, bytes.byteLength - Number(m[2]));
       const end = m[1] && m[2] ? Math.min(Number(m[2]), bytes.byteLength - 1) : bytes.byteLength - 1;
       if (start > end || start >= bytes.byteLength) return c.body(null, 416, { "content-range": `bytes */${bytes.byteLength}` });
-      return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": "audio/ogg", "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": "private, max-age=3600" });
+      return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": "private, max-age=3600" });
     }
-    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": "audio/ogg", "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": "private, max-age=3600" });
+    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": type, "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": "private, max-age=3600" });
   });
 
   app.get("/items/:id/export.md", async (c) => {

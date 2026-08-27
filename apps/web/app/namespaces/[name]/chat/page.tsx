@@ -42,7 +42,7 @@ export default async function NamespaceChatPage({ params, searchParams }: PagePr
           </Link>
         </nav>
       </header>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Chat endpoint={`namespaces/${encodeURIComponent(ns.name)}/chat`} chatId={`ns:${ns.id}`} mode="namespace" seed={seed} />
         <aside className="space-y-3">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">What this corpus covers</p>

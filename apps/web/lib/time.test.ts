@@ -15,4 +15,9 @@ describe("timestamps", () => {
     expect(linkifyTimestamps("Talk title @ 05:00 covers it")).toBe("Talk title [05:00](#t=300) covers it");
     expect(linkifyTimestamps("already [12:34](#t=754) linked")).toBe("already [12:34](#t=754) linked");
   });
+
+  it("leaves namespace citations intact (no nested links inside link text)", () => {
+    const cite = "See [Talk: backlash @ 05:00](/items/vid_1?t=300) and [Ep 3 @ 13:20](/items/vid_2?t=800), plus [00:10].";
+    expect(linkifyTimestamps(cite)).toBe("See [Talk: backlash @ 05:00](/items/vid_1?t=300) and [Ep 3 @ 13:20](/items/vid_2?t=800), plus [00:10](#t=10).");
+  });
 });

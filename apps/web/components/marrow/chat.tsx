@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage, isToolUIPart } from "ai";
 import { Eye, MessageSquare, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
@@ -13,7 +13,7 @@ import {
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
-import { fmtTs, linkifyTimestamps } from "@/lib/time";
+import { absolutizeInternalLinks, fmtTs, linkifyTimestamps } from "@/lib/time";
 import { usePlayerOptional } from "./player";
 import { markdownComponents } from "./timestamp-link";
 
@@ -51,8 +51,10 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
     [sendMessage, getCurrentTime],
   );
 
+  const seeded = useRef<string | null>(null);
   useEffect(() => {
-    if (seed) {
+    if (seed && seeded.current !== seed) {
+      seeded.current = seed;
       send(seed);
       onSeedConsumed?.();
     }
@@ -63,7 +65,7 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
   const suggestions = mode === "item" ? ITEM_SUGGESTIONS : NAMESPACE_SUGGESTIONS;
 
   return (
-    <div className={`flex h-[70vh] min-h-[420px] flex-col rounded-lg border border-border/70 bg-card ${className}`}>
+    <div className={`flex h-[70vh] min-h-[420px] min-w-0 max-w-full flex-col rounded-lg border border-border/70 bg-card ${className}`}>
       <Conversation className="flex-1">
         <ConversationContent>
           {messages.length === 0 ? (
@@ -88,7 +90,7 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
       </Conversation>
 
       {messages.length === 0 && (
-        <Suggestions className="border-t border-border/70 px-3 py-2">
+        <Suggestions className="border-t border-border/70 px-3 py-2 sm:w-full sm:flex-wrap">
           {suggestions.map((s) => (
             <Suggestion key={s} suggestion={s} onClick={send} />
           ))}
@@ -97,7 +99,7 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
 
       <PromptInput onSubmit={onSubmit} className="m-2 border-border/70 shadow-none">
         <PromptInputBody>
-          <PromptInputTextarea value={input} onChange={(e) => setInput(e.currentTarget.value)} placeholder={mode === "item" ? "Ask about this video…" : "Ask across every video in this namespace…"} />
+          <PromptInputTextarea value={input} onChange={(e) => setInput(e.currentTarget.value)} placeholder={mode === "item" ? "Ask about this video…" : "Ask across every video in this namespace…"} aria-label={mode === "item" ? "Ask about this video" : "Ask across this namespace"} />
         </PromptInputBody>
         <PromptInputFooter>
           <PromptInputTools>
@@ -137,7 +139,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
               <p key={key} className="whitespace-pre-wrap">{part.text}</p>
             ) : (
               <MessageResponse key={key} className="md text-[15.5px]" components={markdownComponents}>
-                {linkifyTimestamps(part.text)}
+                {absolutizeInternalLinks(linkifyTimestamps(part.text))}
               </MessageResponse>
             );
           }

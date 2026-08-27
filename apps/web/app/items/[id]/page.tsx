@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { AutoRefresh } from "@/components/marrow/auto-refresh";
 import { ItemView } from "@/components/marrow/item-view";
 import { api } from "@/lib/api";
 import { isWebUrl, kindLabel } from "@/lib/kind";
@@ -31,13 +32,24 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
   const item = await api.item(id).catch(() => null);
   if (!item) notFound();
   if (item.status !== "ready") {
+    const failed = item.status === "failed";
     return (
-      <div className="space-y-3">
-        <h1 className="reading text-2xl font-semibold tracking-tight">{item.title || item.sourceUrl}</h1>
-        <p className="text-sm text-muted-foreground">
-          This item is <span className="font-mono">{item.status}</span>. The reader and chat appear once ingestion finishes.{" "}
-          <Link href="/" className="underline underline-offset-[3px]">
-            Back to the library
+      <div className="space-y-4">
+        {!failed && <AutoRefresh active everyMs={4000} />}
+        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{failed ? "Couldn't finish" : "Still working on it"}</p>
+        <h1 className="reading text-2xl font-semibold tracking-tight">{item.title || item.sourceUrl.replace(/^https?:\/\/(www\.)?/, "")}</h1>
+        <p className="reading max-w-2xl text-[16px] leading-relaxed text-foreground/85">
+          {failed ? "We couldn't finish this one. You can retry it from the inbox — it picks up where it stopped." : "Transcribing, writing the article and finding references usually takes a minute or two. This page updates itself when it's ready."}
+        </p>
+        {!failed && (
+          <p className="inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+            <span className="size-1.5 animate-pulse rounded-full bg-time" aria-hidden />
+            working…
+          </p>
+        )}
+        <p className="text-sm">
+          <Link href="/" className="underline underline-offset-[3px] hover:text-foreground">
+            {failed ? "Go to the inbox to retry" : "Back to the inbox"}
           </Link>
         </p>
       </div>

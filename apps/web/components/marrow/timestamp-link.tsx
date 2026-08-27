@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ComponentProps, MouseEvent, ReactNode } from "react";
 import type { Streamdown } from "streamdown";
 import { usePlayer, usePlayerOptional } from "./player";
-import { fmtTs } from "@/lib/time";
+import { INTERNAL_ORIGIN, fmtTs } from "@/lib/time";
 
 /** A timecode. Click → the player seeks there. The one element set in mono + the accent, everywhere. */
 export function TimestampButton({ t, active = false, className = "" }: { t: number; active?: boolean; className?: string }) {
@@ -22,9 +22,11 @@ export function TimestampButton({ t, active = false, className = "" }: { t: numb
   );
 }
 
-/** Markdown `<a>` override: `#t=754` links seek the player; everything else opens in a new tab. */
-export function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
+
+/** Markdown `<a>` override: `#t=754` links seek the player; internal `/items/…` citations navigate; everything else opens in a new tab. */
+export function MarkdownLink({ href: rawHref, children }: { href?: string; children?: ReactNode }) {
   const player = usePlayerOptional();
+  const href = rawHref?.startsWith(INTERNAL_ORIGIN) ? rawHref.slice(INTERNAL_ORIGIN.length) || "/" : rawHref;
   const m = href ? /^#t=(\d+(?:\.\d+)?)$/.exec(href) : null;
   if (m && player) {
     const t = Number(m[1]);

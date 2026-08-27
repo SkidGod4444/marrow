@@ -132,3 +132,13 @@ docs/            PRD.mdx (normative), STACK.md (resolved tech choices)
 ## Cost
 
 Target ≤ $1 per ingested hour-long video (PRD §13). Every stage records its API usage and cost on the job (`bun run cli job <id>`): whisper-1 ≈ $0.36/hr, ≤120 keyframes through gpt-5.6-luna ≈ $0.10, article + enrichment ≈ $0.10–0.20, embeddings ≈ $0.01.
+
+## Testing
+
+| Layer | What runs | Command |
+|---|---|---|
+| Unit / integration | Vitest over the pipeline, services, REST and MCP with PGlite in memory and fake providers (no network) | `bun run test` |
+| End to end | Playwright drives the real web app against the real server in **fake mode** (`MARROW_FAKE=1`: fake pipeline with real media bytes, scripted chat, seeded corpus) — inbox, library/add/follow, item reader/chat/transcript/share, text items, podcast player, shared page, namespace chat, graph, first run, a Pixel-7 pass and an axe accessibility scan; every test fails on any browser error | `./scripts/e2e-stack.sh` then `cd apps/web && bun run e2e` (first-run screens: `E2E_SEED=0 ./scripts/e2e-stack.sh` + `E2E_EMPTY=1 bun run e2e e2e/firstrun.spec.ts`) |
+
+CI runs both on every push and pull request (the E2E job against a production build).
+

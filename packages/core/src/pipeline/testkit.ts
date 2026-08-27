@@ -30,7 +30,31 @@ export async function testEnv() {
   };
 }
 
-const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+/** A real 1×1 JPEG so browsers render fake keyframes instead of a broken image. */
+const FAKE_JPEG = Uint8Array.from(atob("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpgA//Z"), (c) => c.charCodeAt(0));
+
+/** A real 2-second silent WAV (8 kHz, 16-bit mono) so the web player can actually play fake audio. */
+export function fakeWav(seconds = 2): Uint8Array {
+  const rate = 8000;
+  const samples = rate * seconds;
+  const buf = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buf);
+  const str = (o: number, s: string) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  str(0, "RIFF");
+  v.setUint32(4, 36 + samples * 2, true);
+  str(8, "WAVE");
+  str(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, "data");
+  v.setUint32(40, samples * 2, true);
+  return new Uint8Array(buf);
+}
 
 /** Deterministic hashed bag-of-words vector — cosine similarity tracks term overlap, so hybrid search is testable. */
 export function fakeEmbedding(text: string, dims = 1536): number[] {
@@ -95,7 +119,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     },
     async extractAudio(_src, out) {
       hit("extractAudio");
-      await writeFile(out, "fake-audio");
+      await writeFile(out, fakeWav());
     },
     async detectSilences() {
       hit("detectSilences");
@@ -129,6 +153,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     },
     async transcribe(_path, usage) {
       hit("transcribe");
+      if (topic.includes("broken")) throw new Error("simulated transcription failure");
       usage.add("whisper-1", { audio_seconds: duration, requests: 1 });
       const segments: Array<{ start: number; end: number; text: string }> = [];
       const ws: Array<{ word: string; start: number; end: number }> = [];
@@ -218,8 +243,8 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     async downloadUrl(_url, outDir) {
       hit("downloadUrl");
       await mkdir(outDir, { recursive: true });
-      const p = join(outDir, "source.mp3");
-      await writeFile(p, "fake-audio-file");
+      const p = join(outDir, "source.wav");
+      await writeFile(p, fakeWav());
       return p;
     },
   };

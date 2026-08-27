@@ -1,5 +1,6 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
+import { cloneElement, isValidElement, type ReactElement } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -47,6 +48,18 @@ function Button({
   size = "default",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // A keycap that renders a link (`nativeButton={false} render={<Link/>}`) must stay a link for assistive tech:
+  // base-ui announces every non-native element as a button, so links are rendered directly with the keycap styles.
+  if (props.nativeButton === false && isValidElement(props.render)) {
+    const { render, nativeButton: _n, children, ...rest } = props as typeof props & { children?: React.ReactNode }
+    const el = render as ReactElement<Record<string, unknown>>
+    return cloneElement(el, {
+      ...rest,
+      "data-slot": "button",
+      className: cn(buttonVariants({ variant, size, className }), el.props.className as string | undefined),
+      children: children ?? el.props.children,
+    })
+  }
   return (
     <ButtonPrimitive
       data-slot="button"

@@ -80,7 +80,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                   {p.status === "failed" ? (
                     <span className="text-destructive">failed{p.job?.stage ? ` while ${(STAGE_LABEL[p.job.stage] ?? p.job.stage).toLowerCase()}` : ""}</span>
                   ) : (
-                    <Shimmer className="text-[11px]" duration={1.6}>
+                    <Shimmer as="span" className="text-[11px]" duration={1.6}>
                       {p.status === "running" && p.job?.stage ? `${STAGE_LABEL[p.job.stage] ?? p.job.stage}…` : "Queued…"}
                     </Shimmer>
                   )}

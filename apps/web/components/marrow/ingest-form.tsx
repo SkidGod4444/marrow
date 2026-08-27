@@ -28,11 +28,13 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
   const [title, setTitle] = useState("");
   const [namespace, setNamespace] = useState<string>(initial[0] ?? "");
   const [busy, setBusy] = useState(false);
-  // "New namespace…" opens a small dialog; the select never shows the sentinel.
-  const [creating, setCreating] = useState(initial.length === 0);
+  // "New namespace…" opens a small dialog; the select never shows the sentinel. With no namespace yet, pressing Add
+  // asks for a name first and then continues the add — a first-time user is never stuck on a disabled button.
+  const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [creatingBusy, setCreatingBusy] = useState(false);
-  const canSubmit = Boolean(namespace) && (mode === "link" ? url.trim().length > 0 : text.trim().length > 0);
+  const [continueAfterCreate, setContinueAfterCreate] = useState(false);
+  const canSubmit = mode === "link" ? url.trim().length > 0 : text.trim().length > 0;
 
   const post = async (path: string, body: unknown) => {
     const res = await fetch(`/api/marrow/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -53,7 +55,10 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
       setNewName("");
       setCreating(false);
       toast.success("Namespace created", { description: `Everything you add now goes into ${name}.` });
-      router.refresh();
+      if (continueAfterCreate) {
+        setContinueAfterCreate(false);
+        await add(name);
+      } else router.refresh();
     } catch (err) {
       toast.error("Couldn't create the namespace", { description: (err as Error).message });
     } finally {
@@ -64,6 +69,15 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    if (!namespace) {
+      setContinueAfterCreate(true);
+      setCreating(true);
+      return;
+    }
+    await add(namespace);
+  };
+
+  const add = async (namespace: string) => {
     setBusy(true);
     try {
       const link = url.trim();
@@ -133,12 +147,18 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
             <SelectItem value={NEW}>New namespace…</SelectItem>
           </SelectContent>
         </Select>
-        <Dialog open={creating} onOpenChange={setCreating}>
+        <Dialog
+          open={creating}
+          onOpenChange={(o) => {
+            setCreating(o);
+            if (!o) setContinueAfterCreate(false);
+          }}
+        >
           <DialogContent className="sm:max-w-sm">
             <form onSubmit={createNamespace} className="space-y-4">
               <DialogHeader>
-                <DialogTitle className="reading">New namespace</DialogTitle>
-                <DialogDescription>A topic-scoped corpus — videos, posts and papers you add to it are searched and summarised together.</DialogDescription>
+                <DialogTitle className="reading">{continueAfterCreate ? "Name a namespace first" : "New namespace"}</DialogTitle>
+                <DialogDescription>A namespace is a folder for one topic — everything you add to it is searched, summarised and mapped together. Short and lowercase works best, e.g. robotics.</DialogDescription>
               </DialogHeader>
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="font-mono text-sm" autoFocus aria-label="Namespace name" />
               <DialogFooter>
@@ -146,7 +166,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
                   Cancel
                 </Button>
                 <Button type="submit" size="sm" disabled={creatingBusy || !newName.trim()}>
-                  {creatingBusy ? "Creating…" : "Create"}
+                  {creatingBusy ? "Creating…" : continueAfterCreate ? "Create and add" : "Create"}
                 </Button>
               </DialogFooter>
             </form>
