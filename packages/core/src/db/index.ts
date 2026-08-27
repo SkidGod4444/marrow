@@ -58,7 +58,8 @@ export async function createDb(opts: { url?: string; pgliteDir?: string; memory?
   if (opts.url) {
     // RDS / docker-compose Postgres. `prepare: false` keeps us safe behind transaction poolers.
     const ssl = opts.ssl ?? databaseSsl(opts.url);
-    const client = postgres(stripSslParams(opts.url), { prepare: false, max: 10, ...(ssl ? { ssl } : {}) });
+    // onnotice: Postgres NOTICEs ("schema already exists, skipping") are noise in the server log.
+    const client = postgres(stripSslParams(opts.url), { prepare: false, max: 10, onnotice: () => undefined, ...(ssl ? { ssl } : {}) });
     const db = drizzlePg(client, { schema });
     await migratePg(db, { migrationsFolder: MIGRATIONS_DIR });
     return { db: db as unknown as Db, driver: "postgres", close: () => client.end() };
