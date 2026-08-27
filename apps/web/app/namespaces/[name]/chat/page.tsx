@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Chat } from "@/components/marrow/chat";
 import { Markdown } from "@/components/marrow/markdown";
+import { NamespaceSwitcher } from "@/components/marrow/namespace-switcher";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -14,19 +15,21 @@ export async function generateMetadata({ params }: PageProps<"/namespaces/[name]
 }
 
 /** PRD §6.1 per-namespace research chat: summary + entity index as context, the §8 retrieval tools as tools. */
-export default async function NamespaceChatPage({ params }: PageProps<"/namespaces/[name]/chat">) {
+export default async function NamespaceChatPage({ params, searchParams }: PageProps<"/namespaces/[name]/chat">) {
   const { name } = await params;
-  const ns = await api.namespace(decodeURIComponent(name));
+  const sp = await searchParams;
+  const seed = typeof sp.q === "string" && sp.q.trim() ? sp.q.trim() : null;
+  const [ns, namespaces] = await Promise.all([api.namespace(decodeURIComponent(name)), api.namespaces().catch(() => [])]);
   if (!ns) notFound();
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <div className="space-y-1">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Namespace chat</p>
-          <h1 className="reading text-[28px] font-semibold tracking-tight">{ns.name}</h1>
-          <p className="font-mono text-xs text-muted-foreground">
-            {ns.readyCount} video{ns.readyCount === 1 ? "" : "s"}
+          <NamespaceSwitcher current={ns.name} namespaces={namespaces} page="chat" />
+          <p className="font-mono text-[11px] text-muted-foreground">
+            {ns.readyCount} item{ns.readyCount === 1 ? "" : "s"}
             {ns.summary ? " · summary ready" : " · no summary yet"}
           </p>
         </div>
@@ -40,7 +43,7 @@ export default async function NamespaceChatPage({ params }: PageProps<"/namespac
         </nav>
       </header>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <Chat endpoint={`namespaces/${encodeURIComponent(ns.name)}/chat`} chatId={`ns:${ns.id}`} mode="namespace" />
+        <Chat endpoint={`namespaces/${encodeURIComponent(ns.name)}/chat`} chatId={`ns:${ns.id}`} mode="namespace" seed={seed} />
         <aside className="space-y-3">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">What this corpus covers</p>
           {ns.summary ? (

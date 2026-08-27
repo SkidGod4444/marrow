@@ -291,9 +291,14 @@ export function PlayerProvider({ videoId, audioSrc = null, initialT = null, chil
       const p = pendingSeek.current;
       if (p) {
         el.currentTime = p.t;
-        if (p.play) void el.play();
+        if (p.play) void el.play().catch(() => undefined);
         pendingSeek.current = null;
       }
+    };
+    const onError = () => {
+      setBuffering(false);
+      setPlaying(false);
+      console.error("audio: the source could not be played", el.error);
     };
     const onPlay = () => {
       setPlaying(true);
@@ -319,13 +324,14 @@ export function PlayerProvider({ videoId, audioSrc = null, initialT = null, chil
     el.addEventListener("ratechange", onRate);
     el.addEventListener("volumechange", onVolume);
     el.addEventListener("timeupdate", onTime);
+    el.addEventListener("error", onError);
     playerRef.current = {
       seekTo: (t) => {
         el.currentTime = t;
       },
       getCurrentTime: () => el.currentTime,
       getDuration: () => (Number.isFinite(el.duration) ? el.duration : 0),
-      play: () => void el.play(),
+      play: () => void el.play().catch(() => undefined),
       pause: () => el.pause(),
       isPlaying: () => !el.paused,
       mute: () => {
