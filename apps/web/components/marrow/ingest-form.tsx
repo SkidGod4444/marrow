@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,17 +19,19 @@ const looksLikeFeed = (u: string) => /\.(xml|rss|atom)(\?|$)|\/(feed|rss)\/?(\?|
  * Library header: pick (or create) a namespace and add something to it. A link is routed by what it is —
  * YouTube video → ingest, playlist/channel/feed → follow, anything else → capture (PRD §7); "Text" captures a pasted post.
  */
-export function IngestForm({ namespaces }: { namespaces: string[] }) {
+export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
   const router = useRouter();
+  const [namespaces, setNamespaces] = useState(initial);
   const [mode, setMode] = useState<"link" | "text">("link");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
-  const [choice, setChoice] = useState<string>(namespaces[0] ?? NEW);
-  const [newName, setNewName] = useState("");
+  const [namespace, setNamespace] = useState<string>(initial[0] ?? "");
   const [busy, setBusy] = useState(false);
-  const creating = choice === NEW;
-  const namespace = creating ? newName.trim().toLowerCase() : choice;
+  // "New namespace…" opens a small dialog; the select never shows the sentinel.
+  const [creating, setCreating] = useState(initial.length === 0);
+  const [newName, setNewName] = useState("");
+  const [creatingBusy, setCreatingBusy] = useState(false);
   const canSubmit = Boolean(namespace) && (mode === "link" ? url.trim().length > 0 : text.trim().length > 0);
 
   const post = async (path: string, body: unknown) => {
@@ -38,12 +41,31 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
     return json;
   };
 
+  const createNamespace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!name) return;
+    setCreatingBusy(true);
+    try {
+      await post("namespaces", { name });
+      setNamespaces((ns) => (ns.includes(name) ? ns : [...ns, name]));
+      setNamespace(name);
+      setNewName("");
+      setCreating(false);
+      toast.success("Namespace created", { description: `Everything you add now goes into ${name}.` });
+      router.refresh();
+    } catch (err) {
+      toast.error("Couldn't create the namespace", { description: (err as Error).message });
+    } finally {
+      setCreatingBusy(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setBusy(true);
     try {
-      if (creating) await post("namespaces", { name: namespace });
       const link = url.trim();
       let reused = false;
       if (mode === "text") {
@@ -72,10 +94,6 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
         toast.success(reused ? "Already captured" : "Captured", { description: linked ? `${linked} linked video${linked === 1 ? "" : "s"} found — ingest ${linked === 1 ? "it" : "them"} from the item page.` : "It'll be readable and searchable in a moment." });
         setUrl("");
       }
-      if (creating) {
-        setChoice(namespace);
-        setNewName("");
-      }
       if (reused) router.refresh();
       else router.push("/");
     } catch (err) {
@@ -95,20 +113,45 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
             </button>
           ))}
         </div>
-        <Select value={choice} onValueChange={(v) => setChoice(v ?? NEW)}>
-          <SelectTrigger className="w-40" aria-label="Namespace">
+        <Select
+          value={namespace || null}
+          items={[...namespaces.map((n) => ({ value: n, label: n })), { value: NEW, label: "New namespace…" }]}
+          onValueChange={(v) => {
+            if (v === NEW) setCreating(true);
+            else if (v) setNamespace(v);
+          }}
+        >
+          <SelectTrigger className="w-40 font-mono text-[13px]" aria-label="Namespace">
             <SelectValue placeholder="Namespace" />
           </SelectTrigger>
           <SelectContent>
             {namespaces.map((n) => (
-              <SelectItem key={n} value={n}>
+              <SelectItem key={n} value={n} className="font-mono text-[13px]">
                 {n}
               </SelectItem>
             ))}
             <SelectItem value={NEW}>New namespace…</SelectItem>
           </SelectContent>
         </Select>
-        {creating && <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="w-40 font-mono text-sm" aria-label="New namespace name" />}
+        <Dialog open={creating} onOpenChange={setCreating}>
+          <DialogContent className="sm:max-w-sm">
+            <form onSubmit={createNamespace} className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="reading">New namespace</DialogTitle>
+                <DialogDescription>A topic-scoped corpus — videos, posts and papers you add to it are searched and summarised together.</DialogDescription>
+              </DialogHeader>
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="font-mono text-sm" autoFocus aria-label="Namespace name" />
+              <DialogFooter>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={creatingBusy || !newName.trim()}>
+                  {creatingBusy ? "Creating…" : "Create"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
         {mode === "link" && <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube video, article, paper or feed URL" className="w-72" aria-label="URL" />}
         {mode === "link" && (
           <Button type="submit" disabled={busy || !canSubmit}>

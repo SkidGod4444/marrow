@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Inbox" },
   { href: "/library", label: "Library" },
+  { href: "/graph", label: "Graph" },
 ];
 
 /** Primary nav with an explicit current-page state (Nielsen #1: visibility of system status). */
@@ -14,7 +15,8 @@ export function NavLinks() {
   return (
     <nav aria-label="Primary" className="flex items-center gap-1 text-[13px]">
       {LINKS.map((l) => {
-        const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+        // Namespace graphs live under /namespaces/…/graph; keep "Graph" lit there too.
+        const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href) || (l.href === "/graph" && /\/graph$/.test(pathname));
         return (
           <Link
             key={l.href}
