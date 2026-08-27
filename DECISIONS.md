@@ -141,3 +141,7 @@ The first RDS connection was rejected with `no pg_hba.conf entry … no encrypti
 ## 2026-08-27 — SSL query parameters are stripped from `DATABASE_URL`
 
 `pg` (used by pg-boss) lets URL parameters override explicit options, so a leftover `?sslmode=require` forced verification without our CA bundle (`SELF_SIGNED_CERT_IN_CHAIN`). Both drivers now receive the URL with `sslmode`/`ssl`/`sslrootcert`/`uselibpqcompat` removed and take TLS settings only from `databaseSsl` (which still respects `sslmode=disable`). (docs/DEPLOY.md)
+
+## 2026-08-27 — Server continuous deployment
+
+Vercel redeploys the web on push; the EC2 server gets `scripts/deploy-ec2.sh` (fetch, reset to origin/main, compose build/up, in-container health check) driven either by `.github/workflows/deploy-server.yml` (push-based over SSH with a dedicated deploy key; needs port 22 open to GitHub runners) or by `docker/marrow-deploy.timer` (pull-based systemd timer, no inbound SSH, ≤1 min latency). `ci.yml` runs lint/typecheck/tests on every push and PR. (docs/DEPLOY.md Part C)

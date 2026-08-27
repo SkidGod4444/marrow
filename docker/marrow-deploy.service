@@ -1,0 +1,11 @@
+# Pull-based alternative to the GitHub Actions deploy: the box checks GitHub itself, no inbound SSH needed.
+# Install:  sudo cp docker/marrow-deploy.* /etc/systemd/system/ && sudo systemctl enable --now marrow-deploy.timer
+[Unit]
+Description=Deploy Marrow server from origin/main if it changed
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/marrow
+ExecStart=/home/ubuntu/marrow/scripts/deploy-ec2.sh

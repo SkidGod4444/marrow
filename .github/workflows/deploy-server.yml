@@ -1,0 +1,43 @@
+# Push-based deploy: when server-side code lands on main, SSH into the EC2 box and run scripts/deploy-ec2.sh.
+# Secrets: EC2_HOST (Elastic IP or api host), EC2_USER (ubuntu), EC2_SSH_KEY (private key of a dedicated deploy keypair).
+name: Deploy server to EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/server/**"
+      - "packages/core/**"
+      - "docker/server.Dockerfile"
+      - "docker/Caddyfile"
+      - "docker-compose.prod.yml"
+      - "scripts/deploy-ec2.sh"
+      - "package.json"
+      - "bun.lock"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - "tsconfig.json"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 18m
+          script: |
+            set -e
+            cd ~/marrow
+            git fetch --quiet origin main
+            git checkout --quiet main
+            FORCE=1 ./scripts/deploy-ec2.sh

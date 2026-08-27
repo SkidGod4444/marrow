@@ -1,0 +1,10 @@
+[Unit]
+Description=Check origin/main for a new Marrow server every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=marrow-deploy.service
+
+[Install]
+WantedBy=timers.target

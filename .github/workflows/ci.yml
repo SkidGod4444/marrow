@@ -1,0 +1,21 @@
+# Lint, typecheck and test on every push/PR — the web deploys via Vercel, the server via deploy-server.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test

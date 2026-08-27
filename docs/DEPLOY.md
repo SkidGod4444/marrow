@@ -104,6 +104,30 @@ Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 
 Every push to `main` redeploys the web app; the API on EC2 updates with `git pull` + compose as above.
 
+## Part C — Continuous deployment
+
+The web app already redeploys on every push (Vercel). For the server, pick one:
+
+**Option 1 — push-based (GitHub Actions → SSH), immediate.** `.github/workflows/deploy-server.yml` runs whenever server-side files land on `main`, SSHes into the box and runs `scripts/deploy-ec2.sh` (pull, rebuild, restart, health-check). Setup:
+
+1. Make a dedicated deploy keypair on your laptop: `ssh-keygen -t ed25519 -f ~/.ssh/marrow-deploy -N "" -C marrow-deploy`.
+2. Authorise it on the box: `ssh -i marrow-key.pem ubuntu@<EIP> 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/marrow-deploy.pub`.
+3. GitHub → repo → *Settings → Secrets and variables → Actions*: `EC2_HOST` = the Elastic IP, `EC2_USER` = `ubuntu`, `EC2_SSH_KEY` = the contents of `~/.ssh/marrow-deploy` (the private key).
+4. Security group `marrow-web-sg`: the SSH (22) rule must accept GitHub's runners — change its source from *My IP* to `0.0.0.0/0` (key-only auth; password login is off on Ubuntu AMIs). If you'd rather not open 22 to the internet, use Option 2.
+5. Push to `main` (or *Actions → Deploy server to EC2 → Run workflow*). The run's log ends with `healthy at <sha>`.
+
+**Option 2 — pull-based (systemd timer on the box), no inbound SSH.** The box checks `origin/main` every minute and redeploys when it changed:
+
+```bash
+sudo cp docker/marrow-deploy.service docker/marrow-deploy.timer /etc/systemd/system/
+sudo systemctl enable --now marrow-deploy.timer
+systemctl list-timers marrow-deploy.timer        # next run
+journalctl -u marrow-deploy.service -n 50        # last deploy log
+```
+Keep the SSH rule on *My IP*. Latency is up to a minute; logs live on the box instead of GitHub.
+
+Either way `scripts/deploy-ec2.sh` is what runs; you can also execute it by hand on the box. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR.
+
 ## Things that bite first-time AWS users
 
 - **Only the Elastic IP is stable** — if you stop/start the instance without an EIP, the public IP changes.
