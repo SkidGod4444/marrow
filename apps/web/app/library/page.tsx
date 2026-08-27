@@ -23,7 +23,7 @@ export default async function LibraryPage() {
 
   return (
     <div className="space-y-12">
-      <div className="flex flex-wrap items-end justify-between gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
           <h1 className="reading text-[28px] font-semibold tracking-tight">Library</h1>
           <p className="mt-1 font-mono text-xs text-muted-foreground">

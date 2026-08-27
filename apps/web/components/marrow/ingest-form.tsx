@@ -86,7 +86,7 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
   };
 
   return (
-    <form onSubmit={submit} className="flex w-full flex-col gap-2 sm:w-auto">
+    <form onSubmit={submit} className={`flex w-full flex-col gap-2 ${mode === "text" ? "basis-full" : "sm:w-auto"}`}>
       <div className="flex w-full flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md border border-border/70 p-0.5" role="tablist" aria-label="What to add">
           {(["link", "text"] as const).map((m) => (
@@ -117,7 +117,7 @@ export function IngestForm({ namespaces }: { namespaces: string[] }) {
         )}
       </div>
       {mode === "text" && (
-        <div className="flex w-full flex-col gap-2 sm:w-[32rem]">
+        <div className="flex w-full max-w-2xl flex-col gap-2">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="font-sans" aria-label="Title" />
           <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a post, thread, or newsletter text…" rows={5} aria-label="Text to capture" className="reading text-[15px]" />
           <div className="flex justify-end">
