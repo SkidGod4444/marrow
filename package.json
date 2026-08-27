@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@marrow/core": "workspace:*",
+    "@types/bun": "^1.4.0",
     "oxlint": "^1.80.0",
     "turbo": "^2.10.12"
   },
