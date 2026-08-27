@@ -1,15 +1,5 @@
-# https://{MARROW_DOMAIN} → web app; /api/* and /mcp → server (API key still required by the server).
-{$MARROW_DOMAIN} {
+# https://{MARROW_API_DOMAIN} → the Marrow server (REST at /, MCP at /mcp). API key still required by the server.
+{$MARROW_API_DOMAIN} {
 	encode zstd gzip
-
-	handle /mcp* {
-		reverse_proxy server:3001
-	}
-	handle /api/v1/* {
-		uri strip_prefix /api/v1
-		reverse_proxy server:3001
-	}
-	handle {
-		reverse_proxy web:3000
-	}
+	reverse_proxy server:3001
 }

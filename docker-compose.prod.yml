@@ -1,4 +1,5 @@
-# Production on the EC2 box: RDS Postgres + real S3 via .env, Caddy terminates HTTPS for the subdomain.
+# Production on the EC2 box: the Marrow server (REST + MCP + pipeline) behind Caddy (automatic HTTPS) on the
+# API subdomain. The web app is deployed separately on Vercel and talks to this API over HTTPS.
 #   docker compose -f docker-compose.prod.yml up -d --build
 services:
   server:
@@ -11,15 +12,6 @@ services:
     restart: unless-stopped
     expose: ["3001"]
 
-  web:
-    build: { context: ., dockerfile: docker/web.Dockerfile }
-    environment:
-      MARROW_API_URL: http://server:3001
-      MARROW_API_KEY: ${MARROW_API_KEY}
-    depends_on: [server]
-    restart: unless-stopped
-    expose: ["3000"]
-
   caddy:
     image: caddy:2
     ports: ["80:80", "443:443"]
@@ -28,8 +20,8 @@ services:
       - caddydata:/data
       - caddyconfig:/config
     environment:
-      MARROW_DOMAIN: ${MARROW_DOMAIN}
-    depends_on: [web, server]
+      MARROW_API_DOMAIN: ${MARROW_API_DOMAIN}
+    depends_on: [server]
     restart: unless-stopped
 
 volumes:

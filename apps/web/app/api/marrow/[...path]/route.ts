@@ -3,6 +3,10 @@ import { API_URL, apiHeaders } from "@/lib/api";
 // Transparent proxy to the Marrow API for client components (chat stream, frame images, ingest).
 // Attaches the owner API key server-side and streams the upstream body through untouched.
 
+// Vercel: allow long-lived streaming responses (chat). 60 s is the Hobby ceiling; raise on Pro.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 const ALLOW = /^(items\/[^/]+\/(chat|events|archive|export\.md|export\.txt)|frames\/[^/]+|ingest|inbox|namespaces|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {

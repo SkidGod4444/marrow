@@ -9,12 +9,12 @@ export const OG_SIZE = { width: 1200, height: 630 };
 
 const fontCache = new Map<string, Promise<ArrayBuffer | null>>();
 
-/** Bundled WOFF from @fontsource (Satori reads TTF/OTF/WOFF) — no network at render time. */
+/** WOFF files checked in under apps/web/assets/fonts (from @fontsource; Satori reads TTF/OTF/WOFF) — no network at render time. */
 export function localFont(relPath: string): Promise<ArrayBuffer | null> {
   if (!fontCache.has(relPath)) {
     fontCache.set(
       relPath,
-      readFile(join(process.cwd(), "node_modules", relPath))
+      readFile(join(process.cwd(), "assets", relPath))
         .then((b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer)
         .catch(() => null),
     );
@@ -24,7 +24,7 @@ export function localFont(relPath: string): Promise<ArrayBuffer | null> {
 
 let markCache: Promise<string> | null = null;
 export function markDataUrl(): Promise<string> {
-  markCache ??= readFile(join(process.cwd(), "public", "brand", "marrow-mark.png")).then((b) => `data:image/png;base64,${b.toString("base64")}`);
+  markCache ??= readFile(join(process.cwd(), "assets", "brand", "marrow-mark.png")).then((b) => `data:image/png;base64,${b.toString("base64")}`);
   return markCache;
 }
 
@@ -64,8 +64,8 @@ export function Keycap({ children, live = false }: { children: ReactNode; live?:
 
 export async function ogFonts() {
   const [serif, mono] = await Promise.all([
-    localFont("@fontsource/source-serif-4/files/source-serif-4-latin-600-normal.woff"),
-    localFont("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff"),
+    localFont("fonts/source-serif-4-latin-600-normal.woff"),
+    localFont("fonts/ibm-plex-mono-latin-400-normal.woff"),
   ]);
   return [
     ...(serif ? [{ name: "Source Serif 4", data: serif, weight: 600 as const, style: "normal" as const }] : []),

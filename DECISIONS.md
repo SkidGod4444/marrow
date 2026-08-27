@@ -125,3 +125,7 @@ Reviewed every page against Nielsen's heuristics and WCAG 2.2. Fixed: current-pa
 ## 2026-08-27 — ffmpeg keyframes: `-pix_fmt yuvj420p -strict unofficial`
 
 The first real ingest failed at the frames stage: some YouTube encodes are full-range YUV and the mjpeg encoder refuses them. Both flags are now on the keyframe command; the failed job resumed from `frames` and completed ($0.003 for a 19 s video). (PRD §5 stage 4)
+
+## 2026-08-27 — Web on Vercel, API on AWS
+
+Owner decision: deploy the web app on Vercel and keep the server/API/pipeline on AWS. Changes: `next.config.ts` skips `output: "standalone"` on Vercel and traces `apps/web/assets/**` (fonts + brand mark, now checked in) into the serverless functions for the OG routes; the `/api/marrow/*` proxy declares `maxDuration = 60` for streamed chat; `metadataBase` falls back to `VERCEL_PROJECT_PRODUCTION_URL`; `docker-compose.prod.yml` runs only `server` + `caddy` on `api.<domain>` (`MARROW_API_DOMAIN`); `docs/DEPLOY.md` has Part A (AWS API) and Part B (Vercel). Scrollbars are hidden globally by CSS on request. (docs/STACK.md hosting row)

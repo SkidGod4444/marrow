@@ -1,6 +1,13 @@
-# Deploying Marrow on AWS (first-time AWS, step by step)
+# Deploying Marrow — web on Vercel, API on AWS (step by step)
 
-Target (docs/STACK.md): **one EC2 instance** running docker-compose (server + web + Caddy), **RDS PostgreSQL** with pgvector, **one S3 bucket**. ≈ $40/month, all credit-eligible. No ALB, NAT Gateway, ECS, Aurora, CloudFront, or Route 53 needed.
+Two deployables:
+
+- **Web app (`apps/web`) → Vercel.** Pure Next.js; talks to the API over HTTPS with the owner key from its env. Nothing else.
+- **Server (`apps/server`) → AWS.** REST + MCP + the ingestion pipeline (ffmpeg/yt-dlp) on **one EC2 instance** with docker-compose (server + Caddy), **RDS PostgreSQL** with pgvector, **one S3 bucket**. ≈ $40/month, all credit-eligible. No ALB, NAT Gateway, ECS, Aurora, CloudFront, or Route 53 needed.
+
+You need two DNS names at your registrar: `api.marrow.yourdomain.com` → the EC2 Elastic IP (A record), and `marrow.yourdomain.com` → Vercel (CNAME, Vercel tells you the target).
+
+## Part A — API on AWS
 
 Everything below is in the AWS Console (https://console.aws.amazon.com). Pick **one region** and stay in it (top-right region selector). `ap-south-1` (Mumbai) if you are in India; otherwise the region closest to you.
 
@@ -34,13 +41,13 @@ The `vector` extension is preinstalled on RDS PostgreSQL ≥ 15; the app runs `C
 4. **EC2 → Elastic IPs** → *Allocate* → *Associate* with the `marrow` instance. Note the IP.
 5. Let the DB accept the box: **EC2 → Security Groups → `marrow-db-sg`** → *Inbound rules* → *Edit* → add **PostgreSQL (5432)**, source = the `marrow-web-sg` security group. Save.
 
-## 4. Point the subdomain at the box (5 min + DNS propagation)
+## 4. Point the API subdomain at the box (5 min + DNS propagation)
 
 At your domain registrar's DNS panel (wherever `yourdomain.com` lives — not AWS):
 
-- Add an **A record**: name `marrow` (→ `marrow.yourdomain.com`), value = the Elastic IP, TTL 300.
+- Add an **A record**: name `api.marrow` (→ `api.marrow.yourdomain.com`), value = the Elastic IP, TTL 300.
 
-Caddy inside the compose stack will obtain the HTTPS certificate automatically once the name resolves. (`dig marrow.yourdomain.com` should print the Elastic IP.)
+Caddy inside the compose stack obtains the HTTPS certificate automatically once the name resolves (`dig api.marrow.yourdomain.com` should print the Elastic IP).
 
 ## 5. Prepare the box (10 min)
 
@@ -62,7 +69,7 @@ S3_BUCKET=marrow-<something-unique>
 S3_REGION=<your region>
 OPENAI_API_KEY=sk-...
 MARROW_API_KEY=<openssl rand -hex 24>
-MARROW_DOMAIN=marrow.yourdomain.com
+MARROW_API_DOMAIN=api.marrow.yourdomain.com
 ```
 
 **S3 credentials without keys (recommended):** EC2 → the instance → *Actions → Security → Modify IAM role* → create a role `marrow-ec2` with an inline policy allowing `s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket` on your bucket (and `arn:...:bucket/*`). The AWS SDK inside the server container picks the role up automatically — leave `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` empty. (Fallback: IAM → Users → create `marrow-s3` with the same policy → access key → put the pair in `.env`.)
@@ -75,13 +82,25 @@ docker compose -f docker-compose.prod.yml logs -f server   # wait for "marrow se
 ```
 
 Then:
-- `https://marrow.yourdomain.com` → the web app (library).
-- `https://marrow.yourdomain.com/api/v1/health` → `{"ok":true}` (REST is under `/api/v1/`, MCP at `/mcp`).
-- Claude Code: `claude mcp add --transport http marrow https://marrow.yourdomain.com/mcp --header "x-api-key: <MARROW_API_KEY>"`.
+- `https://api.marrow.yourdomain.com/health` → `{"ok":true}`; MCP at `https://api.marrow.yourdomain.com/mcp`.
+- Claude Code: `claude mcp add --transport http marrow https://api.marrow.yourdomain.com/mcp --header "x-api-key: <MARROW_API_KEY>"`.
 
 Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 
-## 7. Things that bite first-time AWS users
+## Part B — Web app on Vercel (10 min)
+
+1. https://vercel.com/new → import the GitHub repo `SkidGod4444/marrow`.
+2. **Root Directory**: `apps/web` (click Edit). Framework preset: Next.js (auto). Leave build/install commands default — Vercel detects the `bun.lock` at the repo root and installs the workspace (the web app imports types from `packages/core`).
+3. **Environment variables** (Production + Preview):
+   - `MARROW_API_URL` = `https://api.marrow.yourdomain.com`
+   - `MARROW_API_KEY` = the same value as in the server's `.env`
+   - `NEXT_PUBLIC_SITE_URL` = `https://marrow.yourdomain.com` (optional; falls back to the Vercel production URL)
+4. Deploy. Then *Settings → Domains* → add `marrow.yourdomain.com` and create the CNAME Vercel shows at your registrar.
+5. Check `https://marrow.yourdomain.com` (inbox), an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
+
+Every push to `main` redeploys the web app; the API on EC2 updates with `git pull` + compose as above.
+
+## Things that bite first-time AWS users
 
 - **Only the Elastic IP is stable** — if you stop/start the instance without an EIP, the public IP changes.
 - **Stopped instances still bill for EBS**; a terminated instance loses its disk (the corpus lives in RDS + S3, so that is fine — `.env` is the only thing to back up).

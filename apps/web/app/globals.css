@@ -353,6 +353,19 @@ textarea {
   font-optical-sizing: auto;
 }
 
+/* No visible scrollbars anywhere (owner preference); scrolling itself is unchanged. */
+html,
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Smooth scrolling for the page and every scroll container; off when the OS asks for reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
   html,

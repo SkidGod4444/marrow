@@ -63,7 +63,8 @@ apps/web/              Next.js (App Router): app/page.tsx (inbox = landing), app
                        components/marrow/* (player, reader, chat, transcript, item-view, knowledge-graph, timestamp-link = keycaps/rail/eyebrow),
                        components/ai-elements/* (vendored, patched locally), components/ui/* (shadcn, button.tsx patched into keycaps)
 scripts/seed-demo.ts   dev-only: seed a `demo` namespace through the fake pipeline for UI work without yt-dlp/OpenAI
-docker/                server + web Dockerfiles, Caddyfile; docker-compose.yml (local) and docker-compose.prod.yml (EC2); docs/DEPLOY.md
+docker/                server + web Dockerfiles, Caddyfile (API subdomain); docker-compose.yml (local full stack) and docker-compose.prod.yml (EC2: server + caddy); docs/DEPLOY.md
+apps/web/assets/       fonts + brand mark read from disk by the OG routes (traced into Vercel functions via outputFileTracingIncludes)
 docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose.yml at root
 ```
 
@@ -98,6 +99,8 @@ docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose
 **Item page is an app layout on desktop**: header + two panes filling `100dvh - header`, each scrolling independently (left: player, description, chapters; right: the tab list stays put and each tab's content scrolls). Below `lg` it stacks and the page scrolls. The kept-mounted chat panel needs `[&[hidden]]:hidden!` so base-ui's `hidden` attribute wins over `lg:flex`. **The YouTube player runs with `controls: 0`** and our own bar (`player-controls.tsx`: play/pause, ±10 s, rail-style scrubber, timecode keycaps, speed, mute, fullscreen; keyboard space/←/→/J/K/L/M/F) — `PlayerApi` exposes `toggle/seekBy/setRate/toggleMute/fullscreen` plus `playing/duration/buffering/muted/rate`.
 
 **Sharing.** `ShareMenu` (Reader header, shared page) copies the link to `/items/[id]/read`, opens it, copies markdown, downloads `.md`/`.txt`, prints. `/items/[id]/read` (`ReadView`, client) is the shared page: hideable player (collapsed keeps the iframe mounted so audio continues), the same `Reader` article (summary, takeaways, topic sections) without chat affordances, and the speaker-labelled transcript behind "Show full transcript". YouTube's own chrome (title/share/"More videos"/"Watch on YouTube") only appears on the poster, initial-buffering, paused and ended states — `PlayerFrame` covers those with our thumbnail poster or the nearest keyframe still (pass `frames={doc.frames}`); never rely on YouTube parameters to hide it.
+
+**Deployment split.** The web app deploys to **Vercel** (root directory `apps/web`; `next.config.ts` drops `standalone` when `VERCEL` is set; the proxy route sets `maxDuration`); the server deploys to **AWS** behind Caddy on `api.<domain>`. Keep the web app free of DB/OpenAI code and of anything that reads files outside `assets/` at runtime. Scrollbars are hidden app-wide by CSS (owner preference) — don't rely on them for affordance.
 
 **OpenGraph images** (`lib/og.tsx`, `app/**/opengraph-image.tsx`) render with `next/og` using bundled `@fontsource` WOFF files read from `node_modules` — never fetch fonts at render time (a network font fetch crashed the route with an empty reply). The item page shows the uploader's description under the player with URLs and `MM:SS` timestamps linkified (`components/marrow/description.tsx`); chapters are a compact line beneath it.
 
