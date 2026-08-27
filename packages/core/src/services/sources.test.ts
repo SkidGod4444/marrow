@@ -62,10 +62,10 @@ describe("subscriptions (PRD §6.4)", () => {
 
     it("records errors without throwing", async () => {
       const r = await addSource(env.db, { namespace: "feeds", url: "https://example.com/feed.xml" });
-      const res = await pollSource({ db: env.db, listEntries: fakeListing }, r.source);
-      expect(res.error).toMatch(/Phase 5/);
+      const res = await pollSource({ db: env.db, storage: env.storage, listEntries: fakeListing, fetchFeed: async () => Promise.reject(new Error("feed answered 503")) }, r.source);
+      expect(res.error).toMatch(/503/);
       const [src] = await env.db.select().from(sources);
-      expect(src!.lastError).toMatch(/Phase 5/);
+      expect(src!.lastError).toMatch(/503/);
     });
   });
 });

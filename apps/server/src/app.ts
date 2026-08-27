@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
+import { timingSafeEqual } from "node:crypto";
 import {
-  SOURCE_TYPES, type SourceKind, addSource, archiveItem, createIngest, createNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument,
-  getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity,
-  pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
+  SOURCE_TYPES, type CaptureInput, type SourceKind, addSource, archiveItem, audioKey, captureEmail, createCapture, createIngest, createNamespace, exportItemMarkdown, exportItemText,
+  exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources,
+  logEvent, lookupEntity, normalizeInboundEmail, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
 } from "@marrow/core";
-import { type ServerDeps, runSearch } from "./deps.ts";
+import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 
 export type AppDeps = ServerDeps;
@@ -18,9 +19,10 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) => c.json({ ok: true }));
 
   // Single-owner API key (PRD §8). When MARROW_API_KEY is unset (local dev) everything is open.
+  // The inbound-email webhook authenticates with its own token in the path (mail providers can't send our header).
   app.use("*", async (c, next) => {
     const key = deps.config.MARROW_API_KEY;
-    if (key) {
+    if (key && !c.req.path.startsWith("/inbound/email/")) {
       const got = c.req.header("x-api-key") ?? c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
       if (got !== key) return c.json({ error: "unauthorized" }, 401);
     }
@@ -81,7 +83,7 @@ export function createApp(deps: AppDeps) {
     try {
       const res = await addSource(deps.db, body);
       const poll = body.poll === undefined ? true : body.poll;
-      const polled = poll ? await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, res.source) : null;
+      const polled = poll ? await pollSource(pollDeps(deps), res.source) : null;
       return c.json({ source: res.source, created: res.created, poll: polled }, res.created ? 201 : 200);
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400);
@@ -93,13 +95,46 @@ export function createApp(deps: AppDeps) {
   app.post("/sources/:id/poll", async (c) => {
     const [src] = (await listSources(deps.db)).filter((s) => s.id === c.req.param("id"));
     if (!src) return c.json({ error: "source not found" }, 404);
-    return c.json(await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, src));
+    return c.json(await pollSource(pollDeps(deps), src));
   });
 
   app.post("/namespaces/:ref/poll", async (c) => {
     const ns = await getNamespace(deps.db, c.req.param("ref"));
     if (!ns) return c.json({ error: "namespace not found" }, 404);
-    return c.json({ results: await pollAllSources({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, ns.id) });
+    return c.json({ results: await pollAllSources(pollDeps(deps), ns.id) });
+  });
+
+  // ---- Capture (PRD §7) ----
+  app.post("/capture", async (c) => {
+    const body = await c.req.json<CaptureInput>().catch(() => null);
+    if (!body || typeof body !== "object") return c.json({ error: "expected a JSON body {namespace, url?, text?, title?, author?, note?}" }, 400);
+    try {
+      const res = await createCapture(captureDeps(deps), body);
+      return c.json(
+        { job_id: res.job.id, item_id: res.item.id, reused: res.reused, state: res.job.state, source_type: res.item.sourceType, title: res.item.title, linked_videos: res.linked_videos, queued_videos: res.queued_videos },
+        res.reused ? 200 : 202,
+      );
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  // Inbound email webhook (STACK:inbound_email): the provider posts each mail here; token in the path, not the API key.
+  app.post("/inbound/email/:token", async (c) => {
+    const expected = deps.config.INBOUND_EMAIL_TOKEN;
+    const got = c.req.param("token");
+    const enc = new TextEncoder();
+    if (!expected || got.length !== expected.length || !timingSafeEqual(enc.encode(got), enc.encode(expected))) return c.json({ error: "unauthorized" }, 401);
+    const mail = normalizeInboundEmail(await c.req.json().catch(() => null));
+    if (!mail) return c.json({ error: "unrecognised email payload" }, 400);
+    try {
+      const res = await captureEmail(captureDeps(deps), mail, { defaultNamespace: deps.config.INBOUND_EMAIL_NAMESPACE });
+      return c.json({ ok: true, item_id: res.item.id, job_id: res.job.id, reused: res.reused }, res.reused ? 200 : 202);
+    } catch (err) {
+      // 2xx so the provider doesn't retry a mail we will never accept (no namespace, empty body); the reason is logged.
+      console.warn(`[inbound email] dropped: ${(err as Error).message}`);
+      return c.json({ ok: false, dropped: (err as Error).message }, 200);
+    }
   });
 
   // ---- Watch inbox (PRD §6.4) ----
@@ -187,6 +222,23 @@ export function createApp(deps: AppDeps) {
     const transcript = c.req.query("transcript") === "none" ? "none" : "full";
     const maxEntries = c.req.query("max_entries") ? Number(c.req.query("max_entries")) : undefined;
     return c.json(presentDocument(doc, { transcript, maxEntries, includeWords: c.req.query("words") === "1" }));
+  });
+
+  app.get("/items/:id/audio", async (c) => {
+    const item = await getItem(deps.db, c.req.param("id"));
+    if (!item) return c.json({ error: "item not found" }, 404);
+    const key = audioKey(item.id);
+    if (!(await deps.storage.exists(key))) return c.json({ error: "no audio for this item" }, 404);
+    const bytes = await deps.storage.get(key);
+    const range = c.req.header("range");
+    const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+    if (m && (m[1] || m[2])) {
+      const start = m[1] ? Number(m[1]) : Math.max(0, bytes.byteLength - Number(m[2]));
+      const end = m[1] && m[2] ? Math.min(Number(m[2]), bytes.byteLength - 1) : bytes.byteLength - 1;
+      if (start > end || start >= bytes.byteLength) return c.body(null, 416, { "content-range": `bytes */${bytes.byteLength}` });
+      return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": "audio/ogg", "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": "private, max-age=3600" });
+    }
+    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": "audio/ogg", "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": "private, max-age=3600" });
   });
 
   app.get("/items/:id/export.md", async (c) => {

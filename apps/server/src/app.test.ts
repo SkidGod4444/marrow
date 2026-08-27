@@ -72,7 +72,7 @@ describe("REST app (Phase 1 endpoints)", () => {
 
     const md = await app.request(`/items/${item_id}/export.md`);
     expect(md.headers.get("content-type")).toContain("text/markdown");
-    expect(await md.text()).toMatch(/^# Talk: /);
+    expect(await md.text()).toMatch(/^---\ntitle: "Talk: [\s\S]*\n# Talk: /);
     expect((await app.request("/namespaces/kv-cache/export.md")).status).toBe(200);
     expect((((await (await app.request("/namespaces/kv-cache/entities")).json()) as { entities: unknown[] }).entities.length)).toBe(2);
   });

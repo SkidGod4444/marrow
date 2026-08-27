@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { type Db, items } from "../db/index.ts";
 import type { VideoDocument } from "../document.ts";
+import { isTextSource } from "../ids.ts";
 import { toDialogue } from "../pipeline/speakers.ts";
 import { deepLink, fmtTs } from "../timefmt.ts";
 import type { Storage } from "../storage/index.ts";
@@ -9,13 +10,24 @@ import { listEntities } from "./entities.ts";
 import { listItems } from "./items.ts";
 import { getNamespace } from "./namespaces.ts";
 
+const yq = (s: string) => JSON.stringify(s);
 const link = (doc: VideoDocument, t: number | null | undefined) => (t === null || t === undefined ? "" : `[${fmtTs(t)}](${deepLink(doc.source_url, t)})`);
 
 /** PRD §8 `export_markdown(video_id)`: clean markdown with clickable timestamp links (Obsidian/Notion-ready). */
-export function documentToMarkdown(doc: VideoDocument, opts: { transcript?: boolean } = {}): string {
+export function documentToMarkdown(doc: VideoDocument, opts: { transcript?: boolean; frontmatter?: boolean } = {}): string {
   const out: string[] = [];
+  const text = isTextSource(doc.source_type);
+  if (opts.frontmatter ?? true) {
+    // YAML properties: Obsidian shows them as a properties block and they make the note filterable.
+    out.push("---", `title: ${yq(doc.title || doc.id)}`, `source: ${yq(doc.source_url)}`, `type: ${doc.source_type}`);
+    if (doc.channel) out.push(`${text ? "site" : "channel"}: ${yq(doc.channel)}`);
+    if (doc.author) out.push(`author: ${yq(doc.author)}`);
+    if (doc.published_at) out.push(`published: ${doc.published_at.slice(0, 10)}`);
+    if (doc.duration_s) out.push(`duration: ${yq(fmtTs(doc.duration_s))}`);
+    out.push("tags:", "  - marrow", `  - marrow/${doc.source_type.replace(/_/g, "-")}`, "---", "");
+  }
   out.push(`# ${doc.title || doc.id}`);
-  const meta = [doc.channel && `**${doc.channel}**`, doc.published_at && doc.published_at.slice(0, 10), doc.duration_s && fmtTs(doc.duration_s), `[source](${doc.source_url})`].filter(Boolean);
+  const meta = [doc.author && `**${doc.author}**`, doc.channel && (text ? doc.channel : `**${doc.channel}**`), doc.published_at && doc.published_at.slice(0, 10), doc.duration_s && fmtTs(doc.duration_s), /^https?:/.test(doc.source_url) ? `[source](${doc.source_url})` : null].filter(Boolean);
   out.push(meta.join(" · "), "");
   if (doc.article) {
     out.push("## Summary", "", doc.article.summary, "");
@@ -39,6 +51,7 @@ export function documentToMarkdown(doc: VideoDocument, opts: { transcript?: bool
     out.push("## Claims", "", ...doc.claims.map((c) => `- ${c.stance === "supports" ? "✅" : c.stance === "opposes" ? "❌" : "•"} ${c.claim_text}${c.entity ? ` _(${c.entity})_` : ""}${c.t !== null ? ` · ${link(doc, c.t)}` : ""}`), "");
   }
   if (doc.novelty) out.push("## Novelty", "", doc.novelty.verdict, "");
+  if (opts.transcript && text && doc.body_md.trim()) out.push("## Original text", "", doc.body_md.trim(), "");
   if (opts.transcript && doc.transcript.length) {
     out.push("## Transcript", "");
     const label = speakerLabels(doc);
@@ -58,13 +71,14 @@ export function speakerLabels(doc: VideoDocument): (id: string) => string {
 /** Plain text: readable as-is, shareable anywhere. `[MM:SS] Speaker: text` paragraphs after the summary. */
 export function documentToText(doc: VideoDocument, opts: { transcript?: boolean } = {}): string {
   const out: string[] = [doc.title || doc.id];
-  const meta = [doc.channel, doc.published_at?.slice(0, 10), doc.duration_s ? fmtTs(doc.duration_s) : null, doc.source_url].filter(Boolean);
+  const meta = [doc.author, doc.channel, doc.published_at?.slice(0, 10), doc.duration_s ? fmtTs(doc.duration_s) : null, /^https?:/.test(doc.source_url) ? doc.source_url : null].filter(Boolean);
   out.push(meta.join(" · "), "");
   if (doc.article) {
     out.push("SUMMARY", doc.article.summary, "");
     if (doc.article.takeaways.length) out.push("TAKEAWAYS", ...doc.article.takeaways.map((t) => `- ${t}`), "");
   }
   if (doc.speakers.length > 1) out.push("SPEAKERS", ...doc.speakers.map((s) => `${s.id}: ${s.label}`), "");
+  if ((opts.transcript ?? true) && isTextSource(doc.source_type) && doc.body_md.trim()) out.push("TEXT", "", doc.body_md.trim(), "");
   if ((opts.transcript ?? true) && doc.transcript.length) {
     out.push("TRANSCRIPT", "");
     const label = speakerLabels(doc);

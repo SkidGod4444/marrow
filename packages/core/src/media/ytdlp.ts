@@ -68,6 +68,15 @@ export function channelVideosUrl(url: string): string {
 }
 
 /** Canonical form so (namespace, source_url) idempotency survives playlist/tracking params. */
+export function isYouTubeUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^(www|m|music)\./, "");
+    return host === "youtube.com" || host === "youtu.be";
+  } catch {
+    return false;
+  }
+}
+
 export function canonicalizeSourceUrl(url: string): string {
   try {
     const u = new URL(url.trim());

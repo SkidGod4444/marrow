@@ -149,3 +149,16 @@ Vercel redeploys the web on push; the EC2 server gets `scripts/deploy-ec2.sh` (f
 ## 2026-08-27 — Server CD is pull-based only
 
 Owner chose the systemd timer over the GitHub Actions SSH deploy (no need to open port 22 to the internet for a one-person box). `deploy-server.yml` removed; `ci.yml` stays. (docs/DEPLOY.md Part C)
+
+## 2026-08-27 — Phase 5: capture, feeds, inbound email (PRD §7, §14)
+
+- **Text extraction** uses `@mozilla/readability` over a `linkedom` DOM, `turndown` for markdown, `unpdf` for PDFs, `fast-xml-parser` for feeds — pure JS, no headless browser (PRD: plain fetch, no automation). arXiv `abs`/`html` links resolve to the PDF so papers get full text. (§7)
+- **Social platforms are never fetched** (X, LinkedIn, Facebook, Instagram, Threads): a capture of such a link requires `text` (share-sheet passes both) — honours the "never scrape LinkedIn/X" rule. (§3, §7)
+- **SSRF guard**: capture/podcast downloads only reach public http(s) hosts (loopback, link-local, RFC1918 rejected) even though the endpoint is API-key protected — the server sits inside the VPC next to RDS. (§7)
+- **Pasted text is keyed by content hash** (`marrow:text:<sha256[:24]>`) and emails by `Message-ID` (`marrow:email:<id>`) so the (namespace, source_url) idempotency rule of §5 covers text without a URL. Synthetic ids are never rendered as links.
+- **Capture fetches synchronously** (title/author/body known at `POST` time; the pipeline's fetch stage is a no-op for text) so the share-sheet acceptance ("searchable in < 1 min") only waits on article/enrich/segment. A bare URL that yields < 80 characters of text is rejected with a plain-language error rather than stored empty.
+- **Linked YouTube videos (owner Q4)**: default **off** — offered on the item page; namespace flag `auto_ingest_links` queues them (max 5 per capture). Owner may flip the default.
+- **Feeds**: RSS 2.0/Atom via `sources.kind = "rss"`; enclosures → `podcast_episode` through the media pipeline (direct download instead of yt-dlp; feed title/author/date kept by the fetch stage), other entries → captured text (feed body when ≥ 500 chars, else the page). **At most `FEED_MAX_PER_POLL` (5) new entries per poll, newest first**, so a new subscription doesn't ingest a back-catalogue at ≈ $1/hour. (§7, §13)
+- **Inbound email is a provider-agnostic webhook** (`/inbound/email/<INBOUND_EMAIL_TOKEN>`; Postmark / CloudMailin / generic JSON), namespace from the recipient plus-tag or `INBOUND_EMAIL_NAMESPACE`. Unroutable mails are answered 200 and logged so providers stop retrying. **Provider choice is the owner's** (`STACK:inbound_email`): Postmark or CloudMailin work without a domain. (§7)
+- **Podcast playback**: `GET /items/:id/audio` streams the pipeline's mono Opus audio (range requests) and the web player drives an `<audio>` element behind the same `PlayerApi` as the YouTube iframe, so timecodes seek podcasts too. (§6.2)
+- **Markdown export gains YAML front-matter** (title/source/type/author/published/duration/tags) for Obsidian's properties panel; text items export their original text under `?transcript=1`. (§8)

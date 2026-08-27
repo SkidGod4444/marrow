@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, RotateCcw } from "lucide-react";
+import { Pause, Play, RotateCcw } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PlayerControls } from "./player-controls";
 
@@ -97,7 +97,22 @@ export function youtubeId(url: string): string | null {
   }
 }
 
-const HostContext = createContext<{ hostRef: React.RefObject<HTMLDivElement | null>; frameRef: React.RefObject<HTMLDivElement | null>; videoId: string | null } | null>(null);
+const HostContext = createContext<{ hostRef: React.RefObject<HTMLDivElement | null>; frameRef: React.RefObject<HTMLDivElement | null>; videoId: string | null; audioSrc: string | null } | null>(null);
+
+/** What the provider drives: the YouTube iframe or an <audio> element (podcast episodes) — same API for the rest of the app. */
+type Backend = {
+  seekTo(t: number): void;
+  getCurrentTime(): number;
+  getDuration(): number;
+  play(): void;
+  pause(): void;
+  isPlaying(): boolean;
+  mute(): void;
+  unMute(): void;
+  isMuted(): boolean;
+  setRate(r: number): void;
+  destroy(): void;
+};
 
 export type FrameRef = { id: string; t: number };
 
@@ -111,6 +126,7 @@ export function PlayerFrame({ className = "", collapsed = false, frames = [] }: 
   const host = useContext(HostContext);
   const p = usePlayer();
   if (!host) throw new Error("PlayerFrame must be used inside <PlayerProvider>");
+  if (!host.videoId && host.audioSrc) return <AudioFrame className={className} collapsed={collapsed} />;
   const poster = host.videoId ? `https://i.ytimg.com/vi/${host.videoId}/hqdefault.jpg` : null;
   const still = (() => {
     if (!frames.length) return poster;
@@ -157,10 +173,35 @@ export function PlayerFrame({ className = "", collapsed = false, frames = [] }: 
   );
 }
 
-export function PlayerProvider({ videoId, initialT = null, children }: { videoId: string | null; initialT?: number | null; children: React.ReactNode }) {
+/** Audio-only sources (podcast episodes): no picture, just the control bar on a slim panel; `collapsed` keeps the element alive. */
+function AudioFrame({ className = "", collapsed = false }: { className?: string; collapsed?: boolean }) {
+  const host = useContext(HostContext)!;
+  const p = usePlayer();
+  return (
+    <div ref={host.frameRef} className={`group/player flex flex-col overflow-hidden rounded-lg border border-border/70 bg-black ${className}`}>
+      <div ref={host.hostRef} className="hidden" />
+      {!collapsed && (
+        <button
+          type="button"
+          aria-label={p.playing ? "Pause" : p.ended ? "Replay" : "Play"}
+          onClick={p.ended ? () => p.seekTo(0, true) : p.toggle}
+          className="flex h-28 w-full cursor-pointer items-center justify-center gap-5 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklch,var(--time)_18%,transparent),transparent_70%)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:h-36"
+        >
+          <span className="flex size-14 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-[0_8px_30px_rgb(0_0_0/0.6)] backdrop-blur-sm transition-transform group-hover/player:scale-105">
+            {p.buffering && !p.playing ? <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : p.ended ? <RotateCcw className="size-5" /> : p.playing ? <Pause className="size-5" fill="currentColor" /> : <Play className="ml-0.5 size-6" fill="currentColor" />}
+          </span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/60">audio</span>
+        </button>
+      )}
+      <PlayerControls />
+    </div>
+  );
+}
+
+export function PlayerProvider({ videoId, audioSrc = null, initialT = null, children }: { videoId: string | null; audioSrc?: string | null; initialT?: number | null; children: React.ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<YTPlayer | null>(null);
+  const playerRef = useRef<Backend | null>(null);
   const [ready, setReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(initialT ?? 0);
   const [duration, setDuration] = useState(0);
@@ -181,7 +222,7 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
     host.appendChild(mount);
     loadYouTubeApi().then((YT) => {
       if (cancelled) return;
-      playerRef.current = new YT.Player(mount, {
+      const yt = new YT.Player(mount, {
         videoId,
         width: "100%",
         height: "100%",
@@ -194,8 +235,8 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
             setMuted(playerRef.current?.isMuted() ?? false);
             const p = pendingSeek.current;
             if (p) {
-              playerRef.current?.seekTo(p.t, true);
-              if (p.play) playerRef.current?.playVideo();
+              yt.seekTo(p.t, true);
+              if (p.play) yt.playVideo();
               pendingSeek.current = null;
             }
           },
@@ -205,16 +246,29 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
             setEnded(e.data === YT.PlayerState.ENDED);
             if (e.data === YT.PlayerState.PLAYING) {
               setStarted(true);
-              setDuration(playerRef.current?.getDuration() ?? 0);
+              setDuration(yt.getDuration() ?? 0);
             }
           },
           onPlaybackRateChange: (e: { data: number }) => setRateState(e.data),
         },
       });
+      playerRef.current = {
+        seekTo: (t) => yt.seekTo(t, true),
+        getCurrentTime: () => (typeof yt.getCurrentTime === "function" ? yt.getCurrentTime() || 0 : 0),
+        getDuration: () => (typeof yt.getDuration === "function" ? yt.getDuration() || 0 : 0),
+        play: () => yt.playVideo(),
+        pause: () => yt.pauseVideo(),
+        isPlaying: () => yt.getPlayerState() === 1,
+        mute: () => yt.mute(),
+        unMute: () => yt.unMute(),
+        isMuted: () => yt.isMuted(),
+        setRate: (r) => yt.setPlaybackRate(r),
+        destroy: () => yt.destroy(),
+      };
     });
     const tick = setInterval(() => {
       const p = playerRef.current;
-      if (p && typeof p.getCurrentTime === "function") setCurrentTime(p.getCurrentTime() || 0);
+      if (p) setCurrentTime(p.getCurrentTime());
     }, 250);
     return () => {
       cancelled = true;
@@ -225,38 +279,109 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
     };
   }, [videoId]);
 
+  // Audio backend: a plain <audio> element (podcast episodes streamed from the API). Same state machine as above.
+  useEffect(() => {
+    if (videoId || !audioSrc) return;
+    const el = new Audio();
+    el.preload = "metadata";
+    el.src = audioSrc;
+    const onMeta = () => {
+      setDuration(Number.isFinite(el.duration) ? el.duration : 0);
+      setReady(true);
+      const p = pendingSeek.current;
+      if (p) {
+        el.currentTime = p.t;
+        if (p.play) void el.play();
+        pendingSeek.current = null;
+      }
+    };
+    const onPlay = () => {
+      setPlaying(true);
+      setStarted(true);
+      setEnded(false);
+    };
+    const onPause = () => setPlaying(false);
+    const onEnded = () => {
+      setPlaying(false);
+      setEnded(true);
+    };
+    const onWaiting = () => setBuffering(true);
+    const onPlaying = () => setBuffering(false);
+    const onRate = () => setRateState(el.playbackRate);
+    const onVolume = () => setMuted(el.muted);
+    const onTime = () => setCurrentTime(el.currentTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("waiting", onWaiting);
+    el.addEventListener("playing", onPlaying);
+    el.addEventListener("ratechange", onRate);
+    el.addEventListener("volumechange", onVolume);
+    el.addEventListener("timeupdate", onTime);
+    playerRef.current = {
+      seekTo: (t) => {
+        el.currentTime = t;
+      },
+      getCurrentTime: () => el.currentTime,
+      getDuration: () => (Number.isFinite(el.duration) ? el.duration : 0),
+      play: () => void el.play(),
+      pause: () => el.pause(),
+      isPlaying: () => !el.paused,
+      mute: () => {
+        el.muted = true;
+      },
+      unMute: () => {
+        el.muted = false;
+      },
+      isMuted: () => el.muted,
+      setRate: (r) => {
+        el.playbackRate = r;
+      },
+      destroy: () => {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      },
+    };
+    return () => {
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+  }, [videoId, audioSrc]);
+
   const seekTo = useCallback((t: number, play = true) => {
     const p = playerRef.current;
     if (!p || !ready) {
       pendingSeek.current = { t, play };
       return;
     }
-    p.seekTo(t, true);
-    if (play) p.playVideo();
+    p.seekTo(t);
+    if (play) p.play();
     setCurrentTime(t);
     frameRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [ready]);
   const getCurrentTime = useCallback(() => playerRef.current?.getCurrentTime() ?? 0, []);
-  const play = useCallback(() => playerRef.current?.playVideo(), []);
-  const pause = useCallback(() => playerRef.current?.pauseVideo(), []);
+  const play = useCallback(() => playerRef.current?.play(), []);
+  const pause = useCallback(() => playerRef.current?.pause(), []);
   const toggle = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    if (p.getPlayerState() === 1) p.pauseVideo();
-    else p.playVideo();
+    if (p.isPlaying()) p.pause();
+    else p.play();
   }, []);
   const seekBy = useCallback(
     (delta: number) => {
       const p = playerRef.current;
       if (!p) return;
       const t = Math.max(0, Math.min((p.getDuration() || Number.POSITIVE_INFINITY) - 0.5, p.getCurrentTime() + delta));
-      p.seekTo(t, true);
+      p.seekTo(t);
       setCurrentTime(t);
     },
     [],
   );
   const setRate = useCallback((r: number) => {
-    playerRef.current?.setPlaybackRate(r);
+    playerRef.current?.setRate(r);
     setRateState(r);
   }, []);
   const toggleMute = useCallback(() => {
@@ -274,10 +399,10 @@ export function PlayerProvider({ videoId, initialT = null, children }: { videoId
   }, []);
 
   const api = useMemo<PlayerApi>(
-    () => ({ seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, hasVideo: Boolean(videoId) }),
-    [seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, videoId],
+    () => ({ seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, hasVideo: Boolean(videoId || audioSrc) }),
+    [seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, videoId, audioSrc],
   );
-  const hostValue = useMemo(() => ({ hostRef, frameRef, videoId }), [videoId]);
+  const hostValue = useMemo(() => ({ hostRef, frameRef, videoId, audioSrc }), [videoId, audioSrc]);
   return (
     <PlayerContext.Provider value={api}>
       <HostContext.Provider value={hostValue}>{children}</HostContext.Provider>

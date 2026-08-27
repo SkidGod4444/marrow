@@ -10,7 +10,7 @@ export const segmentStage: StageFn = async (ctx) => {
   const { doc, item, namespace, db, providers, usage, log } = ctx;
   const entries = doc.transcript.length
     ? doc.transcript.map((e) => ({ t_start: e.t_start, t_end: e.t_end, text: e.text }))
-    : paragraphsToEntries(doc.article?.sections.map((s) => s.body_md).join("\n\n") ?? doc.description);
+    : paragraphsToEntries(doc.body_md || doc.article?.sections.map((s) => s.body_md).join("\n\n") || doc.description);
   if (!entries.length) return { skipped: "nothing to segment" };
 
   const segs = buildSegments(entries, { chapters: doc.chapters, frames: doc.frames });

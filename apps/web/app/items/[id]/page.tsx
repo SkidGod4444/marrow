@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { ItemView } from "@/components/marrow/item-view";
 import { api } from "@/lib/api";
+import { isWebUrl, kindLabel } from "@/lib/kind";
 import { fmtTs } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: PageProps<"/items/[id]">): Pr
   return {
     title: item.title || "Item",
     description,
-    openGraph: { type: "video.other", title: item.title, description, url: `/items/${item.id}` },
+    openGraph: { type: item.sourceType === "youtube_video" || item.sourceType === "podcast_episode" ? "video.other" : "article", title: item.title, description, url: `/items/${item.id}` },
     twitter: { card: "summary_large_image", title: item.title, description },
   };
 }
@@ -50,15 +51,19 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
       <header className="shrink-0 space-y-2">
         <h1 className="reading max-w-4xl text-[24px] font-semibold leading-[1.15] tracking-[-0.01em] sm:text-[30px]">{doc.title}</h1>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
-          {doc.channel && <span>{doc.channel}</span>}
+          {doc.source_type !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(doc.source_type)}</span>}
+          {doc.author && <span>{doc.author}</span>}
+          {doc.channel && doc.channel !== doc.author && <span>{doc.channel}</span>}
           {doc.published_at && <span>{doc.published_at.slice(0, 10)}</span>}
           {doc.duration_s ? <span>{fmtTs(doc.duration_s)}</span> : null}
           {doc.language && <span className="uppercase">{doc.language}</span>}
           {doc.frames.length > 0 && <span>{doc.frames.length} keyframes</span>}
-          <a href={doc.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-foreground">
-            source
-            <ArrowUpRight className="size-3" />
-          </a>
+          {isWebUrl(doc.source_url) && (
+            <a href={doc.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-foreground">
+              source
+              <ArrowUpRight className="size-3" />
+            </a>
+          )}
           <Link href={`/namespaces/${encodeURIComponent(item.namespaceId)}/graph?focus=${item.id}`} className="inline-flex items-center gap-0.5 hover:text-foreground">
             graph
             <ArrowRight className="size-3" />

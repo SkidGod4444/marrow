@@ -10,6 +10,7 @@ import type { DiarSegment, KnownSpeaker } from "../openai/diarize.ts";
 import type { SttResult } from "../openai/transcribe.ts";
 import type { FrameDescription } from "../openai/vision.ts";
 import type { Storage } from "../storage/index.ts";
+import type { PageContent } from "../capture/page.ts";
 
 /** Everything a stage touches that costs money or shells out — swapped for fakes in tests. */
 export interface Providers {
@@ -26,6 +27,10 @@ export interface Providers {
   describeFrame(jpeg: Uint8Array, usage: UsageTracker): Promise<FrameDescription>;
   generate<T extends z.ZodType>(opts: GenerateOpts<T>, usage: UsageTracker): Promise<z.infer<T>>;
   embed(texts: string[], usage: UsageTracker): Promise<number[][]>;
+  /** PRD §7 capture: readable text of a public page/PDF (plain fetch). */
+  fetchPage(url: string): Promise<PageContent>;
+  /** Direct media URL (podcast enclosure) → local file; returns the path. */
+  downloadUrl(url: string, outDir: string): Promise<string>;
 }
 
 export interface StageContext {

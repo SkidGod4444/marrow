@@ -1,6 +1,6 @@
-import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, listPlaylistEntries, loadConfig, pollAllSources, runJob } from "@marrow/core";
+import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob } from "@marrow/core";
 import { createApp } from "./app.ts";
-import { realRetrieval } from "./deps.ts";
+import { pollDeps, realRetrieval } from "./deps.ts";
 
 // One process does everything (owner decision): REST API, MCP over HTTP, and the ingestion job runner.
 const config = loadConfig();
@@ -13,16 +13,17 @@ await queue.start(async (jobId) => {
   await runJob({ db, storage, config, providers, log: (m) => console.log(`[job ${jobId}] ${m}`) }, jobId);
 });
 
-// PRD §6.4: poll subscribed playlists/channels on a schedule (pg-boss cron on Postgres, a timer on PGlite).
+// PRD §6.4/§7: poll subscribed playlists/channels/feeds on a schedule (pg-boss cron on Postgres, a timer on PGlite).
 if (config.POLL_EVERY_MINUTES > 0) {
   await queue.schedule("poll-sources", config.POLL_EVERY_MINUTES, async () => {
-    const results = await pollAllSources({ db, queue, listEntries: (url) => listPlaylistEntries(config, url), log: (m) => console.log(`[poll] ${m}`) });
+    const results = await pollAllSources({ ...pollDeps(deps), log: (m) => console.log(`[poll] ${m}`) });
     const queued = results.reduce((n, r) => n + r.queued.length, 0);
     if (results.length) console.log(`[poll] ${results.length} sources checked, ${queued} new items queued`);
   });
 }
 
-const app = createApp({ db, storage, config, queue, ...realRetrieval(config) });
+const deps = { db, storage, config, queue, ...realRetrieval(config) };
+const app = createApp(deps);
 
 const server = Bun.serve({ port: config.PORT, fetch: app.fetch, idleTimeout: 120 });
 console.log(

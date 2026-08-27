@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import {
-  type Config, type Db, type JobQueue, type PlaylistListing, type SourceKind, type Storage, type SummaryDeps, RERANK_SYSTEM, RerankSchema, UsageTracker,
-  embedTexts, generateStructured, listPlaylistEntries, search, type SearchInput,
+  type Config, type Db, type Feed, type JobQueue, type PageContent, type PlaylistListing, type PollDeps, type SourceKind, type Storage, type SummaryDeps, RERANK_SYSTEM, RerankSchema, UsageTracker,
+  embedTexts, fetchFeed, fetchPage, generateStructured, listPlaylistEntries, search, type SearchInput,
 } from "@marrow/core";
 
 /** Everything both skins (REST + MCP) need. `embedQuery`/`rerank` are injectable so tests never call OpenAI. */
@@ -18,11 +18,26 @@ export type ServerDeps = {
   listEntries: (url: string, kind: SourceKind) => Promise<PlaylistListing>;
   /** Structured generation for namespace summaries (OpenAI in production, a fake in tests). */
   generate: SummaryDeps["generate"];
+  /** PRD §7 capture: readable text of a public page/PDF (plain fetch in production, a fake in tests). */
+  fetchPage: (url: string) => Promise<PageContent>;
+  /** RSS/Atom feed for subscription polling. */
+  fetchFeed: (url: string) => Promise<Feed>;
 };
 
-export function realRetrieval(config: Config): Pick<ServerDeps, "embedQuery" | "rerank" | "listEntries" | "generate"> {
+/** Everything `pollSource`/`pollAllSources` need, from the server deps. */
+export function pollDeps(deps: ServerDeps): PollDeps {
+  return { db: deps.db, queue: deps.queue, storage: deps.storage, listEntries: deps.listEntries, fetchFeed: deps.fetchFeed, fetchPage: deps.fetchPage, maxPerPoll: deps.config.FEED_MAX_PER_POLL };
+}
+
+export function captureDeps(deps: ServerDeps) {
+  return { db: deps.db, storage: deps.storage, queue: deps.queue, fetchPage: deps.fetchPage };
+}
+
+export function realRetrieval(config: Config): Pick<ServerDeps, "embedQuery" | "rerank" | "listEntries" | "generate" | "fetchPage" | "fetchFeed"> {
   return {
     listEntries: (url) => listPlaylistEntries(config, url),
+    fetchPage: (url) => fetchPage(url, { timeoutMs: config.CAPTURE_FETCH_TIMEOUT_MS, maxBytes: config.CAPTURE_MAX_BYTES }),
+    fetchFeed: (url) => fetchFeed(url),
     generate: (opts, usage) => generateStructured(config, opts, usage),
     embedQuery: async (text) => (await embedTexts(config, [text], new UsageTracker()))[0]!,
     rerank: async (query, candidates) => {

@@ -1,6 +1,7 @@
 import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { audioKey, type TranscriptEntry, type Word } from "../../document.ts";
+import { isTextSource } from "../../ids.ts";
 import { planChunks } from "../../media/ffmpeg.ts";
 import type { SttResult } from "../../openai/transcribe.ts";
 import type { StageFn } from "../types.ts";
@@ -9,6 +10,7 @@ import { ensureLocal, round2 } from "./helpers.ts";
 /** Stage 2 — whisper-1 with word timestamps; silence-split when the audio exceeds the 25 MB cap. */
 export const transcribeStage: StageFn = async (ctx) => {
   const { doc, item, providers, workDir, config, usage, log } = ctx;
+  if (isTextSource(doc.source_type)) return { skipped: "text source" };
   await mkdir(workDir, { recursive: true });
   const audioPath = await ensureLocal(ctx, audioKey(item.id), join(workDir, "audio.ogg"));
   const size = (await stat(audioPath)).size;

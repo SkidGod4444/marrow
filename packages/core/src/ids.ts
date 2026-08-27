@@ -18,6 +18,11 @@ export function isMediaSource(t: SourceType): boolean {
   return (MEDIA_SOURCE_TYPES as readonly string[]).includes(t);
 }
 
+/** Text sources (PRD §4.2) skip transcription/vision; their segments carry no timestamps. */
+export function isTextSource(t: string): boolean {
+  return (TEXT_SOURCE_TYPES as readonly string[]).includes(t);
+}
+
 /** Item ids: `vid_` for media documents (PRD §4.3), `txt_` for text sources. */
 export function newItemId(sourceType: SourceType): string {
   return newId(isMediaSource(sourceType) ? "vid" : "txt");

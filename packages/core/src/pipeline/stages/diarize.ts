@@ -7,6 +7,7 @@ import { planChunks } from "../../media/ffmpeg.ts";
 import type { DiarSegment, KnownSpeaker } from "../../openai/diarize.ts";
 import { SPEAKER_LABELS_SYSTEM, SpeakerLabelsSchema } from "../prompts.ts";
 import { alignSpeakers } from "../speakers.ts";
+import { isTextSource } from "../../ids.ts";
 import type { StageFn } from "../types.ts";
 import { ensureLocal } from "./helpers.ts";
 
@@ -47,6 +48,7 @@ async function referenceClips(ctx: Parameters<StageFn>[0], audioPath: string, se
 
 export const diarizeStage: StageFn = async (ctx) => {
   const { doc, item, namespace, config, providers, usage, log, workDir } = ctx;
+  if (isTextSource(doc.source_type)) return { skipped: "text source" };
   const decision = shouldDiarize(doc, namespace, config);
   if (!decision.yes || !doc.transcript.length) {
     doc.speakers = [{ id: "S1", label: "Speaker 1" }];

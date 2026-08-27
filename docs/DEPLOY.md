@@ -73,6 +73,7 @@ S3_BUCKET=marrow-<something-unique>
 S3_REGION=<your region>
 OPENAI_API_KEY=sk-...
 MARROW_API_KEY=<openssl rand -hex 24>
+INBOUND_EMAIL_TOKEN=<openssl rand -hex 24>   # only if you wire inbound email (docs/CAPTURE.md §3)
 MARROW_API_DOMAIN=api.marrow.yourdomain.com
 ```
 

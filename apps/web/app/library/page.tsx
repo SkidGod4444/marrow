@@ -3,6 +3,7 @@ import { IngestForm } from "@/components/marrow/ingest-form";
 import { Markdown } from "@/components/marrow/markdown";
 import { SourcesPanel } from "@/components/marrow/sources-panel";
 import { api } from "@/lib/api";
+import { kindLabel } from "@/lib/kind";
 import { fmtTs } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default async function LibraryPage() {
       {namespaces.length === 0 && (
         <div className="rounded-lg border border-dashed px-6 py-14 text-center">
           <p className="text-sm font-medium">Nothing here yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Type a namespace name and paste a YouTube link above to ingest your first video.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Type a namespace name and paste a link above — a YouTube video, an article, a paper, or a podcast feed.</p>
         </div>
       )}
 
@@ -72,6 +73,7 @@ export default async function LibraryPage() {
                     <>
                       <span className={`size-1.5 shrink-0 rounded-full ${st.dot}`} aria-hidden />
                       <span className="reading min-w-0 flex-1 truncate text-[16px]">{item.title || item.sourceUrl}</span>
+                      {item.sourceType !== "youtube_video" && <span className="hidden rounded-md border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">{kindLabel(item.sourceType)}</span>}
                       <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground sm:block">{item.channel}</span>
                       <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.status === "ready" && item.durationS ? fmtTs(item.durationS) : st.label}</span>
                     </>

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Config } from "../config.ts";
 import { type Db, type Job, type StageRecord, events, items, jobs, namespaces } from "../db/index.ts";
 import { STAGE_NAMES, type StageName, type VideoDocument, VideoDocumentSchema, documentKey, newDocument, rawPrefix } from "../document.ts";
-import { newId } from "../ids.ts";
+import { isTextSource, newId } from "../ids.ts";
 import { UsageTracker } from "../openai/client.ts";
 import type { Storage } from "../storage/index.ts";
 import { invalidateDocument } from "../services/documents.ts";
@@ -58,6 +58,10 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
     existing && existing.pipeline.version === job.version
       ? existing
       : newDocument({ id: item.id, namespace_id: namespace.id, source_type: item.sourceType as VideoDocument["source_type"], source_url: item.sourceUrl, version: job.version });
+  if (doc !== existing && existing && isTextSource(item.sourceType)) {
+    // Captured text has no upstream to re-fetch from (pasted posts, emails): carry it into the new version.
+    Object.assign(doc, { title: existing.title, author: existing.author, channel: existing.channel, description: existing.description, published_at: existing.published_at, body_md: existing.body_md, linked_videos: existing.linked_videos, has_video: false });
+  }
   const workDir = join(config.WORK_DIR, item.id);
 
   const saveJob = async () => {

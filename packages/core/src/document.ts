@@ -98,6 +98,11 @@ export const VideoDocumentSchema = z.object({
   source_url: z.string(),
   title: z.string().default(""),
   channel: z.string().default(""),
+  /** Text sources (PRD §7): who wrote it, and the readable body as markdown (the "transcript" of a post/newsletter/paper). */
+  author: z.string().default(""),
+  body_md: z.string().default(""),
+  /** YouTube links found in a captured text — offered (or auto-queued, namespace flag `auto_ingest_links`) for full ingestion. */
+  linked_videos: z.array(z.string()).default([]),
   description: z.string().default(""),
   published_at: z.string().nullable().default(null),
   duration_s: z.number().default(0),

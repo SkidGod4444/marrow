@@ -83,6 +83,16 @@ export const ConfigSchema = z.object({
 
   // Subscriptions (PRD §6.4): poll playlists/channels every N minutes; 0 disables the schedule.
   POLL_EVERY_MINUTES: z.coerce.number().default(30),
+  // RSS/podcast feeds: at most this many new entries are ingested per poll (a fresh subscription doesn't pull a whole back-catalogue).
+  FEED_MAX_PER_POLL: z.coerce.number().default(5),
+
+  // Capture (PRD §7): plain server-side fetch of a public URL.
+  CAPTURE_FETCH_TIMEOUT_MS: z.coerce.number().default(15_000),
+  CAPTURE_MAX_BYTES: z.coerce.number().default(8 * 1024 * 1024),
+  // Inbound email (STACK:inbound_email): the provider's webhook posts to /inbound/email/<INBOUND_EMAIL_TOKEN>;
+  // mails route to the namespace in the recipient's plus-tag (anything+<namespace>@…) or to INBOUND_EMAIL_NAMESPACE.
+  INBOUND_EMAIL_TOKEN: z.string().optional(),
+  INBOUND_EMAIL_NAMESPACE: z.string().optional(),
 
   // Server
   PORT: z.coerce.number().default(3001),

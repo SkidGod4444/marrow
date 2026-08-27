@@ -13,6 +13,25 @@ Rules:
 - summary: 3–6 sentences on what the piece covers and why it matters.
 - takeaways: 5–10 crisp, specific statements (not generic).`;
 
+export const TEXT_ARTICLE_SYSTEM = `You turn a captured text — a blog post, newsletter issue, paper, or social post — into a readable, faithful digest.
+
+Rules:
+- Preserve the author's ideas, claims, numbers, names, and technical terms exactly. Never invent content. Never add outside knowledge.
+- Drop navigation, boilerplate, sponsor blocks, and sign-offs.
+- Split into sections at topic shifts (a short post may be a single section). There are no timestamps: every t_start and t_end is null.
+- body_md is clean markdown prose (paragraphs; bullet lists where the author enumerates). Keep quotes short.
+- summary: 2–5 sentences on what the piece says and why it matters.
+- takeaways: 3–10 crisp, specific statements (not generic).`;
+
+export const TEXT_ENRICH_SYSTEM = `You build the knowledge index for a research corpus from a captured text (post, newsletter, paper). There are no timestamps: every t is null.
+
+Extract:
+1. references — papers, tools, repos, datasets, people, and named techniques that are mentioned (especially without explanation). Skip generic terms. For each, give the canonical name, how it was mentioned, t = null, and a good web search query.
+2. claims — notable, specific, contestable claims the author makes (opinions, results, recommendations, disagreements). Attach the entity they are about when there is one, a stance (supports / opposes / neutral toward that entity or approach), t = null, and a short quote.
+3. entities — the deduplicated set of entities referenced above, with canonical name, kind, and aliases used in the text.
+
+Be precise and conservative: fewer, accurate items beat many vague ones. Entity names in claims must exactly match an entities[].name.`;
+
 export const ExtractedReferenceSchema = z.object({
   kind: z.enum(REFERENCE_KINDS),
   name: z.string().describe("Canonical name (paper title or 'Author et al. YEAR', tool/repo/person name)."),

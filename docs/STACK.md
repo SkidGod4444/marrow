@@ -15,7 +15,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | `STACK:llm_cheap` | **OpenAI `gpt-5.6-luna`** ($0.20 / $1.20 per M tokens) | Article, enrichment, novelty, rerank. Structured outputs via zod. |
 | `STACK:embeddings` | **OpenAI `text-embedding-3-small`** (1536 dims, $0.02/M) | `segments.embedding vector(1536)` via pgvector. |
 | `STACK:cron` | **pg-boss `schedule()`** behind `JobQueue.schedule()` (a `setInterval` on PGlite) | The server process polls subscriptions every `POLL_EVERY_MINUTES` (default 30). |
-| `STACK:inbound_email` | **TBD at Phase 5** (Resend inbound or Cloudflare Email Workers → webhook) | Not needed before Phase 5; decide then. |
+| `STACK:inbound_email` | **Provider-agnostic webhook** `POST /inbound/email/<token>` accepting Postmark, CloudMailin and generic JSON; **provider: owner to pick** — Postmark or CloudMailin need no domain (an assigned inbound address); with a domain, Resend/SES work the same way | Routing by recipient plus-tag (`x+<namespace>@…`) or `INBOUND_EMAIL_NAMESPACE`. Setup in `docs/CAPTURE.md` §3. |
 | Chat model | **OpenAI `gpt-5.6-terra`** via `@ai-sdk/openai` (Responses API), `reasoningEffort: low`, `promptCacheKey` per item | Interactive only. |
 | `STACK:api` | **Hono** on bun, owner API key header | MCP HTTP transport mounts on the same Hono app; MCP stdio is a second entrypoint of the same package. |
 
@@ -33,6 +33,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | Reranker | **RRF score fusion** by default; optional Luna rerank behind a flag. |
 | MCP SDK | `@modelcontextprotocol/sdk` (stdio + `InMemoryTransport` for tests) with **`@hono/mcp`** `StreamableHTTPTransport` mounted at `/mcp` on the same Hono app, stateless mode. |
 | OpenAI client | Official `openai` SDK in the pipeline (transcription needs `verbose_json` word output). Vercel AI SDK only in the web app for streaming chat. |
+| Capture / feeds | `@mozilla/readability` + `linkedom` (article extraction), `turndown` (HTML → markdown), `unpdf` (PDF text), `fast-xml-parser` (RSS/Atom) — all pure JS, no headless browser. |
 | Tests / lint | **Vitest** (PGlite in-memory per test file, fake providers); ESLint; `tsc --noEmit`. Live tests gated behind `LIVE=1`. |
 
 ## Owner decisions still open (PRD §15)
@@ -40,7 +41,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | # | Question | Status |
 |---|---|---|
 | 3 | Diarization in v1? | **Deferred** (see `STACK:diarization`). |
-| 4 | Auto-ingest YouTube links from captured posts — default on or off? | TBD at Phase 5 (namespace flag `auto_ingest_links`, schema ready). |
+| 4 | Auto-ingest YouTube links from captured posts — default on or off? | **Default off** (linked videos are offered on the item page with an "Ingest" button); a namespace with flag `auto_ingest_links: true` queues them immediately. Owner can flip the default. |
 | 5 | Licence (repo ships AGPL-3.0) and copyright entity | TBD before the repo goes public. |
 
 ## Local prerequisites (dev machine)

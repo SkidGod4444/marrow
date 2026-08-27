@@ -82,15 +82,15 @@ export function SourcesPanel({ namespace, sources }: { namespace: string; source
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger render={<Button variant="outline" size="xs" />}>
           <ListPlus />
-          Follow a playlist or channel
+          Follow a playlist, channel or feed
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <form onSubmit={add} className="space-y-4">
             <DialogHeader>
               <DialogTitle className="reading">Follow in {namespace}</DialogTitle>
-              <DialogDescription>Paste a YouTube playlist or channel URL. New uploads are ingested automatically; the first check runs now.</DialogDescription>
+              <DialogDescription>Paste a YouTube playlist or channel URL, or an RSS feed (podcast or blog). New uploads and episodes are ingested automatically, blog posts are captured as text; the first check runs now.</DialogDescription>
             </DialogHeader>
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/playlist?list=… or /@channel" autoFocus aria-label="Playlist or channel URL" />
+            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="youtube.com/playlist?list=… · youtube.com/@channel · …/feed.xml" autoFocus aria-label="Playlist, channel or feed URL" />
             <DialogFooter>
               <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 Cancel

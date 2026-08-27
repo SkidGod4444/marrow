@@ -3,10 +3,13 @@
 import { useCallback, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PresentedDocument } from "@/lib/api";
+import { isTextKind } from "@/lib/kind";
 import { Chat } from "./chat";
 import { Description } from "./description";
+import { Markdown } from "./markdown";
 import { PlayerFrame, PlayerProvider, youtubeId } from "./player";
 import { Reader } from "./reader";
+import { SourceCard } from "./source-card";
 import { Eyebrow, TimestampButton } from "./timestamp-link";
 import { Transcript } from "./transcript";
 
@@ -19,14 +22,18 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
     setTab("chat");
   }, []);
   const consumed = useCallback(() => setSeed(null), []);
+  const text = isTextKind(doc.source_type);
+  const videoId = doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null;
+  // Podcast episodes / uploads: the pipeline's audio is streamed from the API (through the proxy) into our player.
+  const audioSrc = !text && !videoId && doc.pipeline.stages_completed.includes("fetch") ? `/api/marrow/items/${doc.id}/audio` : null;
 
   return (
-    <PlayerProvider videoId={doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null} initialT={initialT}>
+    <PlayerProvider videoId={videoId} audioSrc={audioSrc} initialT={initialT}>
       <div className={`grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] lg:gap-10 ${className}`}>
         {/* Left pane scrolls on its own (player stays near the top; long descriptions scroll under it). */}
         <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
-          <PlayerFrame frames={doc.frames} />
-          {doc.description.trim() && <Description text={doc.description} />}
+          {text ? <SourceCard doc={doc} /> : <PlayerFrame frames={doc.frames} />}
+          {!text && doc.description.trim() && <Description text={doc.description} />}
           {doc.chapters.length > 0 && (
             <div className="space-y-2">
               <Eyebrow>Chapters</Eyebrow>
@@ -48,7 +55,8 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
             <TabsTrigger value="reader">Reader</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="transcript">
-              Transcript{doc.transcript_entries ? <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{doc.transcript_entries}</span> : null}
+              {text ? "Text" : "Transcript"}
+              {!text && doc.transcript_entries ? <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{doc.transcript_entries}</span> : null}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="reader" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
@@ -59,7 +67,13 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
             <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} className="lg:h-full lg:min-h-0" />
           </TabsContent>
           <TabsContent value="transcript" className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col">
-            <Transcript doc={doc} />
+            {text ? (
+              <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+                <Markdown className="reading max-w-3xl text-[16px] leading-relaxed">{doc.body_md}</Markdown>
+              </div>
+            ) : (
+              <Transcript doc={doc} />
+            )}
           </TabsContent>
         </Tabs>
       </div>

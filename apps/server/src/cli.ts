@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { writeFile } from "node:fs/promises";
 import {
-  STAGE_NAMES, type StageName, createDb, databaseSsl, createIngest, createNamespace, createProviders, createStorage, getItem,
+  STAGE_NAMES, type StageName, createCapture, createDb, databaseSsl, createIngest, createNamespace, createProviders, createStorage, getItem,
   getJobStatus, getNamespace, listItems, listNamespaces, loadConfig, loadDocument, runJob,
 } from "@marrow/core";
 
@@ -10,6 +10,7 @@ const HELP = `marrow — CLI
   bun run cli ns create <name> [--description "…"] [--language-learning] [--diarize]
   bun run cli ns list
   bun run cli ingest <youtube-url> --ns <name> [--force] [--stages fetch,transcribe,…]
+  bun run cli capture <url | -> --ns <name> [--title "…"] [--author "…"] [--note "…"]   (- reads the text from stdin)
   bun run cli job <job_id>
   bun run cli items --ns <name> [--status ready|failed|queued|running]
   bun run cli doc <item_id> [--out file.json]
@@ -25,6 +26,9 @@ const { values, positionals } = parseArgs({
     "language-learning": { type: "boolean", default: false },
     diarize: { type: "boolean", default: false },
     force: { type: "boolean", default: false },
+    title: { type: "string" },
+    author: { type: "string" },
+    note: { type: "string" },
     stages: { type: "string" },
     status: { type: "string" },
     out: { type: "string" },
@@ -91,6 +95,24 @@ try {
         await writeFile(values.out, json);
         console.log(`wrote ${values.out}`);
       } else console.log(json);
+      break;
+    }
+    case "capture": {
+      // `capture <url>` fetches the page; `capture -` reads pasted text from stdin (optionally with --title/--author).
+      const arg = sub;
+      if (!arg) throw new Error("capture <url | -> --ns <namespace>");
+      const text = arg === "-" ? (await Bun.stdin.text()).trim() : undefined;
+      const providers = createProviders(config);
+      const res = await createCapture({ db, storage, fetchPage: providers.fetchPage }, { namespace: needNs(), url: arg === "-" ? undefined : arg, text, title: values.title, author: values.author, note: values.note, force: values.force });
+      console.log(`${res.reused ? "resuming" : "created"} ${res.item.sourceType} ${res.item.id} — ${res.item.title}`);
+      if (res.linked_videos.length) console.log(`linked videos: ${res.linked_videos.join(", ")}${res.queued_videos.length ? " (queued)" : " (namespace flag auto_ingest_links is off — ingest them by hand)"}`);
+      if (res.reused && res.job.state === "done") {
+        console.log("item is already ready — use --force to re-run");
+        break;
+      }
+      const t0 = Date.now();
+      const job = await runJob({ db, storage, config, providers, log: (m) => console.log(m) }, res.job.id);
+      console.log(`\nDONE in ${((Date.now() - t0) / 1000).toFixed(0)}s — job ${job.id} · $${job.costUsd.toFixed(4)}`);
       break;
     }
     default: {

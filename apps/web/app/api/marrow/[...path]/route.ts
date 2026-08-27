@@ -7,7 +7,7 @@ import { API_URL, apiHeaders } from "@/lib/api";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-const ALLOW = /^(items\/[^/]+\/(chat|events|archive|export\.md|export\.txt)|frames\/[^/]+|ingest|inbox|namespaces|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search)$/;
+const ALLOW = /^(items\/[^/]+\/(chat|events|archive|export\.md|export\.txt|audio)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {
   const { path } = await ctx.params;
@@ -16,14 +16,18 @@ async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): 
   const url = new URL(req.url);
   const upstream = await fetch(`${API_URL}/${target}${url.search}`, {
     method: req.method,
-    headers: apiHeaders({ ...(req.headers.get("content-type") ? { "content-type": req.headers.get("content-type")! } : {}), accept: req.headers.get("accept") ?? "*/*" }),
+    headers: apiHeaders({
+      ...(req.headers.get("content-type") ? { "content-type": req.headers.get("content-type")! } : {}),
+      ...(req.headers.get("range") ? { range: req.headers.get("range")! } : {}), // audio seeking
+      accept: req.headers.get("accept") ?? "*/*",
+    }),
     body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
     // @ts-expect-error — Node fetch needs duplex for streamed request bodies
     duplex: "half",
     cache: "no-store",
   });
   const headers = new Headers();
-  for (const h of ["content-type", "cache-control", "x-frame-t", "x-vercel-ai-ui-message-stream"]) {
+  for (const h of ["content-type", "cache-control", "x-frame-t", "x-vercel-ai-ui-message-stream", "accept-ranges", "content-range", "content-length"]) {
     const v = upstream.headers.get(h);
     if (v) headers.set(h, v);
   }

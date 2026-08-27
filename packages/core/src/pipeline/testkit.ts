@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { loadConfig } from "../config.ts";
 import { createDb } from "../db/index.ts";
 import { LocalStorage } from "../storage/local.ts";
+import type { PageContent } from "../capture/page.ts";
 import type { Providers } from "./types.ts";
 
 export async function testEnv() {
@@ -24,6 +25,8 @@ export async function testEnv() {
     embedQuery: async (q: string) => fakeEmbedding(q),
     listEntries: fakeListing,
     generate: providers.generate,
+    fetchPage: async (url: string) => fakePage(url),
+    fetchFeed: async () => ({ title: null, site_url: null, entries: [] }),
   };
 }
 
@@ -208,6 +211,36 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       usage.add("text-embedding-3-small", { input_tokens: texts.length * 300, requests: 1 });
       return texts.map((t) => fakeEmbedding(t));
     },
+    async fetchPage(url) {
+      hit("fetchPage");
+      return fakePage(url);
+    },
+    async downloadUrl(_url, outDir) {
+      hit("downloadUrl");
+      await mkdir(outDir, { recursive: true });
+      const p = join(outDir, "source.mp3");
+      await writeFile(p, "fake-audio-file");
+      return p;
+    },
+  };
+}
+
+/** Deterministic captured page: a short post about the URL's last path segment, with one YouTube link and one paper. */
+export function fakePage(url: string): PageContent {
+  const u = new URL(url);
+  const slug = u.pathname.split("/").filter(Boolean).pop() ?? "post";
+  const topic = slug.replace(/[-_]+/g, " ");
+  return {
+    url,
+    final_url: url,
+    content_type: u.pathname.endsWith(".pdf") ? "pdf" : "html",
+    title: `Post: ${topic}`,
+    author: "Ada Author",
+    site_name: u.hostname,
+    description: `A post about ${topic}.`,
+    published_at: "2026-02-01T00:00:00.000Z",
+    body_md: `# ${topic}\n\nThis post is about ${topic}. It cites the Tobin et al paper on domain randomization and links a talk: https://www.youtube.com/watch?v=dQw4w9WgXcQ\n\nSecond paragraph: actuator backlash is hard, and ${topic} matters for sim-to-real.`,
+    links: ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://arxiv.org/abs/1703.06907"],
   };
 }
 

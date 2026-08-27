@@ -1,10 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  SOURCE_TYPES, addSource, createIngest, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus,
-  getNamespace, getNamespaceGraph, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument,
+  addSource, createCapture, createIngest, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, SOURCE_TYPES,
 } from "@marrow/core";
-import { type ServerDeps, runSearch } from "./deps.ts";
+import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 
 const text = (data: unknown) => ({ content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] });
 const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true as const });
@@ -162,16 +161,42 @@ export function createMcpServer(deps: ServerDeps): McpServer {
   );
 
   server.registerTool(
+    "capture",
+    {
+      title: "Capture text",
+      description:
+        "Save a web page, paper (arXiv/PDF), or pasted text into a namespace as a searchable text document (PRD §7). Pass a url (fetched server-side, no login) and/or the text itself; social posts (X, LinkedIn) need the text. YouTube links found inside are returned as linked_videos (queued automatically when the namespace has auto_ingest_links).",
+      inputSchema: {
+        namespace: z.string(),
+        url: z.string().optional(),
+        text: z.string().optional(),
+        title: z.string().optional(),
+        author: z.string().optional(),
+        note: z.string().optional().describe("Why you saved it — shown with the item"),
+        source_type: z.enum(["captured_post", "newsletter", "paper"]).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const res = await createCapture(captureDeps(deps), input);
+        return text({ job_id: res.job.id, item_id: res.item.id, reused: res.reused, state: res.job.state, source_type: res.item.sourceType, title: res.item.title, linked_videos: res.linked_videos, queued_videos: res.queued_videos });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
     "subscribe",
     {
-      title: "Subscribe to a playlist or channel",
-      description: "Add a YouTube playlist or channel to a namespace. It is polled on a schedule and new uploads are ingested automatically; the first poll runs immediately.",
-      inputSchema: { namespace: z.string(), url: z.string(), title: z.string().optional() },
+      title: "Subscribe to a playlist, channel or feed",
+      description: "Add a YouTube playlist/channel or an RSS/Atom feed (podcast or blog) to a namespace. It is polled on a schedule: new uploads/episodes are ingested automatically, blog entries are captured as text; the first poll runs immediately.",
+      inputSchema: { namespace: z.string(), url: z.string(), title: z.string().optional(), kind: z.enum(["playlist", "channel", "rss"]).optional() },
     },
-    async ({ namespace, url, title }) => {
+    async ({ namespace, url, title, kind }) => {
       try {
-        const res = await addSource(deps.db, { namespace, url, title });
-        const poll = await pollSource({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, res.source);
+        const res = await addSource(deps.db, { namespace, url, title, kind });
+        const poll = await pollSource(pollDeps(deps), res.source);
         return text({ source: res.source, created: res.created, poll });
       } catch (err) {
         return fail((err as Error).message);
@@ -195,7 +220,7 @@ export function createMcpServer(deps: ServerDeps): McpServer {
     async ({ namespace }) => {
       const ns = namespace ? await getNamespace(deps.db, namespace) : null;
       if (namespace && !ns) return fail(`namespace "${namespace}" not found`);
-      return text({ results: await pollAllSources({ db: deps.db, queue: deps.queue, listEntries: deps.listEntries }, ns?.id) });
+      return text({ results: await pollAllSources(pollDeps(deps), ns?.id) });
     },
   );
 

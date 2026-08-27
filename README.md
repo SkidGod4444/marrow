@@ -114,6 +114,7 @@ All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) whe
 | Apply migrations to `DATABASE_URL` | `bun run db:migrate` (the server and CLI also migrate on start) |
 | Run the server | `bun run server` (`server:dev` for watch mode) |
 | Run the web app | `bun run web` (needs `apps/web/.env.local`) · `bun run build` builds everything via Turborepo |
+| Capture | `docs/CAPTURE.md` — `POST /capture`, iOS/Android share sheet, bookmarklet, inbound email webhook, RSS/podcast feeds, Obsidian export |
 | Deploy | `docs/DEPLOY.md` — web app on **Vercel** (root dir `apps/web`, push-to-deploy), server/API on **AWS** (EC2 + RDS + S3, `docker-compose.prod.yml` with Caddy); server self-deploys from `main` via `docker/marrow-deploy.timer` on the box |
 
 Tests run on an in-memory PGlite with fake providers — no network, no ffmpeg. Live tests against OpenAI are gated behind `LIVE=1`.

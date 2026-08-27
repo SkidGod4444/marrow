@@ -6,66 +6,127 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const NEW = "__new__";
 
-/** Library header: pick (or create) a namespace and queue a YouTube URL through the proxied API. */
+const isYouTubeVideo = (u: string) => /^(https?:\/\/)?((www|m)\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)/i.test(u);
+const isYouTubeList = (u: string) => /youtube\.com\/(playlist\?|@|channel\/|c\/|user\/)/i.test(u) || /[?&]list=/.test(u);
+const looksLikeFeed = (u: string) => /\.(xml|rss|atom)(\?|$)|\/(feed|rss)\/?(\?|$)/i.test(u);
+
+/**
+ * Library header: pick (or create) a namespace and add something to it. A link is routed by what it is —
+ * YouTube video → ingest, playlist/channel/feed → follow, anything else → capture (PRD §7); "Text" captures a pasted post.
+ */
 export function IngestForm({ namespaces }: { namespaces: string[] }) {
   const router = useRouter();
+  const [mode, setMode] = useState<"link" | "text">("link");
   const [url, setUrl] = useState("");
+  const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
   const [choice, setChoice] = useState<string>(namespaces[0] ?? NEW);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const creating = choice === NEW;
   const namespace = creating ? newName.trim().toLowerCase() : choice;
+  const canSubmit = Boolean(namespace) && (mode === "link" ? url.trim().length > 0 : text.trim().length > 0);
+
+  const post = async (path: string, body: unknown) => {
+    const res = await fetch(`/api/marrow/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const json = (await res.json()) as Record<string, unknown> & { error?: string };
+    if (!res.ok) throw new Error(json.error ?? res.statusText);
+    return json;
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || !namespace) return;
+    if (!canSubmit) return;
     setBusy(true);
     try {
-      if (creating) {
-        const r = await fetch("/api/marrow/namespaces", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: namespace }) });
-        if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? "Could not create namespace");
+      if (creating) await post("namespaces", { name: namespace });
+      const link = url.trim();
+      let reused = false;
+      if (mode === "text") {
+        const r = await post("capture", { namespace, text: text.trim(), title: title.trim() || undefined });
+        reused = Boolean(r.reused);
+        const linked = (r.linked_videos as string[] | undefined)?.length ?? 0;
+        toast.success(reused ? "Already captured" : "Captured", { description: linked ? `${linked} linked video${linked === 1 ? "" : "s"} found — ingest ${linked === 1 ? "it" : "them"} from the item page.` : "It'll be readable and searchable in a moment." });
+        setText("");
+        setTitle("");
+      } else if (isYouTubeVideo(link)) {
+        const r = await post("ingest", { namespace, url: link });
+        reused = Boolean(r.reused);
+        toast.success(reused ? "Already in the library" : "Queued", { description: reused ? "Resuming if it had failed." : "Watch it come in on the inbox." });
+        setUrl("");
+      } else if (isYouTubeList(link) || looksLikeFeed(link)) {
+        const r = await post("sources", { namespace, url: link });
+        const queued = ((r.poll as { queued?: string[] } | null)?.queued ?? []).length;
+        toast.success(r.created ? "Following" : "Already following", { description: queued ? `${queued} item${queued === 1 ? "" : "s"} queued from the first check.` : "Checked just now; new entries are picked up automatically." });
+        setUrl("");
+        router.refresh();
+        return;
+      } else {
+        const r = await post("capture", { namespace, url: link });
+        reused = Boolean(r.reused);
+        const linked = (r.linked_videos as string[] | undefined)?.length ?? 0;
+        toast.success(reused ? "Already captured" : "Captured", { description: linked ? `${linked} linked video${linked === 1 ? "" : "s"} found — ingest ${linked === 1 ? "it" : "them"} from the item page.` : "It'll be readable and searchable in a moment." });
+        setUrl("");
       }
-      const res = await fetch("/api/marrow/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ namespace, url: url.trim() }) });
-      const body = (await res.json()) as { job_id?: string; reused?: boolean; error?: string };
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      toast.success(body.reused ? "Already in the library" : "Queued", { description: body.reused ? "Resuming if it had failed." : "Watch it come in on the inbox." });
-      setUrl("");
       if (creating) {
         setChoice(namespace);
         setNewName("");
       }
-      if (body.reused) router.refresh();
+      if (reused) router.refresh();
       else router.push("/");
     } catch (err) {
-      toast.error("Couldn't ingest", { description: (err as Error).message });
+      toast.error(mode === "text" ? "Couldn't capture" : "Couldn't add that", { description: (err as Error).message });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form onSubmit={submit} className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      <Select value={choice} onValueChange={(v) => setChoice(v ?? NEW)}>
-        <SelectTrigger className="w-40" aria-label="Namespace">
-          <SelectValue placeholder="Namespace" />
-        </SelectTrigger>
-        <SelectContent>
-          {namespaces.map((n) => (
-            <SelectItem key={n} value={n}>
-              {n}
-            </SelectItem>
+    <form onSubmit={submit} className="flex w-full flex-col gap-2 sm:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-md border border-border/70 p-0.5" role="tablist" aria-label="What to add">
+          {(["link", "text"] as const).map((m) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)} className={`cursor-pointer rounded-[5px] px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${mode === m ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              {m}
+            </button>
           ))}
-          <SelectItem value={NEW}>New namespace…</SelectItem>
-        </SelectContent>
-      </Select>
-      {creating && <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="w-40 font-mono text-sm" aria-label="New namespace name" />}
-      <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube URL" className="w-64" aria-label="YouTube URL" />
-      <Button type="submit" disabled={busy || !url.trim() || !namespace}>
-        {busy ? "Queuing…" : "Ingest"}
-      </Button>
+        </div>
+        <Select value={choice} onValueChange={(v) => setChoice(v ?? NEW)}>
+          <SelectTrigger className="w-40" aria-label="Namespace">
+            <SelectValue placeholder="Namespace" />
+          </SelectTrigger>
+          <SelectContent>
+            {namespaces.map((n) => (
+              <SelectItem key={n} value={n}>
+                {n}
+              </SelectItem>
+            ))}
+            <SelectItem value={NEW}>New namespace…</SelectItem>
+          </SelectContent>
+        </Select>
+        {creating && <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="w-40 font-mono text-sm" aria-label="New namespace name" />}
+        {mode === "link" && <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube video, article, paper or feed URL" className="w-72" aria-label="URL" />}
+        {mode === "link" && (
+          <Button type="submit" disabled={busy || !canSubmit}>
+            {busy ? "Adding…" : "Add"}
+          </Button>
+        )}
+      </div>
+      {mode === "text" && (
+        <div className="flex w-full flex-col gap-2 sm:w-[32rem]">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="font-sans" aria-label="Title" />
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a post, thread, or newsletter text…" rows={5} aria-label="Text to capture" className="reading text-[15px]" />
+          <div className="flex justify-end">
+            <Button type="submit" disabled={busy || !canSubmit}>
+              {busy ? "Capturing…" : "Capture"}
+            </Button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

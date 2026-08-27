@@ -1,18 +1,24 @@
 import { upsertEntityIndex } from "../../services/entities.ts";
 import { chunk } from "../../util.ts";
-import { transcriptContext } from "../context.ts";
-import { ENRICH_SYSTEM, EnrichmentSchema, RESOLVE_SYSTEM, ResolvedSchema } from "../prompts.ts";
+import { isTextSource } from "../../ids.ts";
+import { textContext, transcriptContext } from "../context.ts";
+import { ENRICH_SYSTEM, EnrichmentSchema, RESOLVE_SYSTEM, ResolvedSchema, TEXT_ENRICH_SYSTEM } from "../prompts.ts";
 import type { StageFn } from "../types.ts";
 
 /** Stage 7 — references (resolved via web search), claims with stance, and the namespace entity index. */
 export const enrichStage: StageFn = async (ctx) => {
   const { doc, item, namespace, db, providers, usage, log } = ctx;
-  if (!doc.transcript.length) return { skipped: "no transcript" };
+  const text = isTextSource(doc.source_type);
+  if (text ? !doc.body_md.trim() : !doc.transcript.length) return { skipped: text ? "no text" : "no transcript" };
 
   const ex = await providers.generate(
-    { system: ENRICH_SYSTEM, user: transcriptContext(doc), schema: EnrichmentSchema, schemaName: "enrichment", effort: "low" },
+    { system: text ? TEXT_ENRICH_SYSTEM : ENRICH_SYSTEM, user: text ? textContext(doc) : transcriptContext(doc), schema: EnrichmentSchema, schemaName: "enrichment", effort: "low" },
     usage,
   );
+  if (text) {
+    for (const r of ex.references) r.t = null;
+    for (const c of ex.claims) c.t = null;
+  }
   log(`${ex.references.length} references, ${ex.claims.length} claims, ${ex.entities.length} entities`);
 
   const urlByName = new Map<string, string | null>();

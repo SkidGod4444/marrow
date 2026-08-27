@@ -1,12 +1,18 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { type Feed, type FeedEntry, fetchFeed, isMediaEnclosure } from "../capture/feeds.ts";
+import { type PageContent, htmlFragmentToMarkdown } from "../capture/page.ts";
 import { type Db, type Source, items, sources } from "../db/index.ts";
 import { newId } from "../ids.ts";
 import { type PlaylistListing, canonicalizeSourceUrl } from "../media/ytdlp.ts";
 import type { JobQueue } from "../queue.ts";
+import type { Storage } from "../storage/index.ts";
+import { createCapture } from "./capture.ts";
 import { createIngest } from "./ingest.ts";
+import { setItemMetadata } from "./items.ts";
 import { getNamespace } from "./namespaces.ts";
 
 // PRD §6.4: subscribed playlists/channels are polled on a schedule; new uploads are ingested automatically.
+// PRD §7: RSS feeds too — podcast enclosures go through the media pipeline, blog entries are captured as text.
 
 export type SourceKind = "playlist" | "channel" | "rss" | "email";
 
@@ -66,6 +72,12 @@ export type PollDeps = {
   queue?: JobQueue;
   /** yt-dlp flat listing in production; a fake in tests. */
   listEntries: (url: string, kind: SourceKind) => Promise<PlaylistListing>;
+  /** RSS/Atom polling (PRD §7). `storage` + `fetchPage` seed captured documents; both injectable for tests. */
+  storage?: Storage;
+  fetchFeed?: (url: string) => Promise<Feed>;
+  fetchPage?: (url: string) => Promise<PageContent>;
+  /** New feed entries ingested per poll (config FEED_MAX_PER_POLL). */
+  maxPerPoll?: number;
   log?: (msg: string) => void;
 };
 
@@ -76,7 +88,8 @@ export async function pollSource(deps: PollDeps, source: Source): Promise<PollRe
   const { db } = deps;
   const result: PollResult = { source_id: source.id, found: 0, queued: [], error: null };
   try {
-    if (source.kind === "rss" || source.kind === "email") throw new Error(`${source.kind} sources are polled from Phase 5`);
+    if (source.kind === "rss") return await pollFeed(deps, source, result);
+    if (source.kind === "email") throw new Error("email sources are not polled — mails arrive through the inbound webhook");
     const listing = await deps.listEntries(source.url, source.kind as SourceKind);
     result.found = listing.entries.length;
     const urls = listing.entries.map((e) => canonicalizeSourceUrl(e.url));
@@ -99,6 +112,58 @@ export async function pollSource(deps: PollDeps, source: Source): Promise<PollRe
     deps.log?.(`poll failed for ${source.url}: ${result.error}`);
   }
   return result;
+}
+
+/** One feed poll: newest entries first, skip what the namespace already has, at most `maxPerPoll` new ones. */
+async function pollFeed(deps: PollDeps, source: Source, result: PollResult): Promise<PollResult> {
+  const { db } = deps;
+  if (!deps.storage) throw new Error("feed polling needs storage");
+  const feed = await (deps.fetchFeed ?? fetchFeed)(source.url);
+  result.found = feed.entries.length;
+  const candidates = feed.entries.filter((e) => e.url || e.enclosure?.url);
+  const urls = candidates.flatMap((e) => [e.url, e.enclosure?.url].filter((u): u is string => Boolean(u)).map(canonicalizeSourceUrl));
+  const existing = urls.length ? await db.select({ url: items.sourceUrl }).from(items).where(and(eq(items.namespaceId, source.namespaceId), inArray(items.sourceUrl, urls))) : [];
+  const have = new Set(existing.map((r) => r.url));
+  const max = deps.maxPerPoll ?? 5;
+  let skipped = 0;
+  for (const entry of candidates) {
+    const key = canonicalizeSourceUrl(isMediaEnclosure(entry) ? entry.enclosure!.url : entry.url);
+    if (have.has(key) || (entry.url && have.has(canonicalizeSourceUrl(entry.url)))) continue;
+    if (result.queued.length >= max) {
+      skipped++;
+      continue;
+    }
+    try {
+      const jobId = await ingestFeedEntry(deps, source, feed, entry);
+      if (jobId) result.queued.push(jobId);
+      have.add(key);
+    } catch (err) {
+      deps.log?.(`feed entry skipped (${entry.title || entry.url}): ${(err as Error).message}`);
+    }
+  }
+  await db.update(sources).set({ lastCheckedAt: new Date(), lastError: null, title: source.title ?? feed.title }).where(eq(sources.id, source.id));
+  deps.log?.(`polled feed ${source.url}: ${result.found} entries, ${result.queued.length} queued${skipped ? `, ${skipped} left for the next poll` : ""}`);
+  return result;
+}
+
+async function ingestFeedEntry(deps: PollDeps, source: Source, feed: Feed, entry: FeedEntry): Promise<string | null> {
+  const { db } = deps;
+  const published = entry.published_at ? new Date(entry.published_at) : null;
+  if (isMediaEnclosure(entry)) {
+    // Podcast episode: the media pipeline (transcribe → diarize → article …) on the enclosure; feed metadata on the item.
+    const res = await createIngest(db, { namespace: source.namespaceId, url: entry.enclosure!.url, sourceType: "podcast_episode" });
+    if (res.reused && res.job.state === "done") return null;
+    await setItemMetadata(db, res.item.id, { title: entry.title || res.item.title, channel: feed.title ?? entry.author ?? "", publishedAt: published });
+    await deps.queue?.enqueue(res.job.id);
+    return res.job.id;
+  }
+  // Blog/newsletter entry: full content from the feed when it carries it, else the page is fetched.
+  const md = entry.content_html ? htmlFragmentToMarkdown(entry.content_html) : "";
+  const res = await createCapture(
+    { db, storage: deps.storage!, queue: deps.queue, fetchPage: deps.fetchPage ?? (() => Promise.reject(new Error("page fetching is not available"))) },
+    { namespace: source.namespaceId, url: entry.url, text: md.length >= 500 ? md : undefined, title: entry.title || undefined, author: entry.author || feed.title || undefined, published_at: entry.published_at },
+  );
+  return res.reused ? null : res.job.id;
 }
 
 export async function pollAllSources(deps: PollDeps, namespaceId?: string): Promise<PollResult[]> {

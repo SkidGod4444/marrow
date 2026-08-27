@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { Config } from "../config.ts";
 import type { Db } from "../db/index.ts";
 import type { VideoDocument } from "../document.ts";
-import { frameLines, referenceLines, transcriptContext } from "../pipeline/context.ts";
+import { frameLines, referenceLines, textContext, transcriptContext } from "../pipeline/context.ts";
+import { isTextSource } from "../ids.ts";
 import type { Storage } from "../storage/index.ts";
 import { fmtTs } from "../timefmt.ts";
 
@@ -14,6 +15,20 @@ import { fmtTs } from "../timefmt.ts";
  * dynamic (playback position) is appended to the latest user message instead.
  */
 export function buildVideoChatSystem(doc: VideoDocument): string {
+  if (isTextSource(doc.source_type)) {
+    return [
+      `You are Marrow, a research assistant for ONE captured text (a ${doc.source_type.replace(/_/g, " ")}). You have its full text below and the references it mentions.
+
+Rules:
+- Answer from the text. Quote or paraphrase closely and say where in the piece it appears (section heading or a short quote); there are no timestamps.
+- Use web_search / fetch_url only to follow references outward (papers, repos, people) or check facts outside the text; say when information comes from the web rather than the text.
+- Be concrete and concise. Use markdown. Never invent quotes.`,
+      textContext(doc),
+      referenceLines(doc),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
   return [
     `You are Marrow, a research assistant for ONE video. You have its full timestamped transcript below, plus a list of keyframes (what was on screen, as text) and the references it name-drops.
 
@@ -166,7 +181,7 @@ export async function buildNamespaceChatSystem(db: Db, ns: Namespace): Promise<s
 
 Rules:
 - Always call search first (several focused queries beat one broad one); use get_context to read around a hit before relying on it; use get_video for an item's article/references; use view_frame to look at a slide or chart; use lookup_entity for everything the corpus says about a paper/tool/person.
-- Cite every claim as a markdown link in exactly this form: [Title @ MM:SS](/items/ITEM_ID?t=SECONDS), using item_id, t_start and the timestamp from the tool results. Cross-video questions must cite at least two different videos when the corpus has them.
+- Cite every claim as a markdown link in exactly this form: [Title @ MM:SS](/items/ITEM_ID?t=SECONDS), using item_id, t_start and the timestamp from the tool results. Text items (posts, newsletters, papers) have no timestamps: cite them as [Title](/items/ITEM_ID). Cross-item questions must cite at least two different items when the corpus has them.
 - Say plainly when the corpus does not cover something. Use markdown; be concrete and concise.`,
     ns.summary ? `CORPUS SUMMARY:\n${ns.summary}` : "CORPUS SUMMARY: (not generated yet — rely on search)",
     ents.length ? `ENTITY INDEX (top by mentions):\n${ents.map((e) => `- ${e.name} (${e.kind}, ${Number(e.n)} mentions)`).join("\n")}` : "",

@@ -9,10 +9,11 @@ import { toast } from "sonner";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { kindLabel } from "@/lib/kind";
 import { fmtDate, fmtTs } from "@/lib/time";
 
 const STAGE_LABEL: Record<string, string> = {
-  fetch: "Downloading",
+  fetch: "Fetching",
   transcribe: "Transcribing",
   diarize: "Finding speakers",
   frames: "Picking keyframes",
@@ -73,6 +74,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
               <div className="min-w-0 space-y-2.5">
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
                   {showNamespace && <span className="text-foreground/80">{p.namespace.name}</span>}
+                  {p.sourceType !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(p.sourceType)}</span>}
                   {p.channel && <span>{p.channel}</span>}
                   {p.durationS ? <span>{fmtTs(p.durationS)}</span> : null}
                   {p.status === "failed" ? (
@@ -114,6 +116,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
             <div className="min-w-0 space-y-2">
               <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
                 {showNamespace && <span className="text-foreground/80">{e.namespace.name}</span>}
+                {e.sourceType !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(e.sourceType)}</span>}
                 {e.channel && <span>{e.channel}</span>}
                 {e.durationS ? <span>{fmtTs(e.durationS)}</span> : null}
                 <span>{fmtDate(e.createdAt)}</span>

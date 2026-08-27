@@ -12,7 +12,7 @@ Marrow ingests long-form video (YouTube first; later podcasts via RSS, uploads, 
 
 ## Repo state & build order
 
-Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1–4 are done** (verified with fakes/mocks; the live OpenAI acceptance runs still need `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
+Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1–5 are done** (verified with fakes/mocks; the live OpenAI acceptance runs still need `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
 
 1. **Phase 1 — Ingestion core.** CLI/endpoint ingests one YouTube URL into a namespace through pipeline stages 1–8. *Accept:* a 1-hr talk yields a valid document JSON with word-level timestamps, ≤120 captioned keyframes, article, references, segments in DB; re-running is idempotent; a failed stage resumes without redoing earlier ones.
 2. **Phase 2 — MCP + REST.** All §8 tools live; Claude Code connects via a config snippet documented in the README. *Accept:* `search` over a 10-video namespace returns timestamped deep-linked segments; `get_frame` returns an image; `lookup_entity` returns cross-video mentions.
@@ -31,6 +31,7 @@ Package manager is **bun** (Turborepo over bun workspaces) — never npm/pnpm. R
 | Tests (Vitest, PGlite in-memory, fake providers — no network) | `bun run test` · single file: `bunx vitest run packages/core/src/pipeline/runner.test.ts` · watch: `bun run test:watch` |
 | Lint | `bun run lint` |
 | CLI (runs the pipeline in-process) | `bun run cli ns create <name>` · `bun run cli ingest <url> --ns <name> [--force] [--stages a,b]` · `bun run cli job <job_id>` · `bun run cli doc <item_id>` |
+| Capture from the CLI | `bun run cli capture <url> --ns <name>` · `pbpaste \| bun run cli capture - --ns <name> --title "…"` |
 | Server (REST + MCP over HTTP at `/mcp` + job runner) | `bun run server` · `bun run server:dev` (watch) |
 | Web app (Next.js, needs `apps/web/.env.local` with `MARROW_API_URL`/`MARROW_API_KEY`) | `bun run web` · typecheck: `cd apps/web && bun run typecheck` (runs `next typegen` first) · build: `bun run build` |
 | MCP over stdio (for `claude mcp add marrow -- bun run …/apps/server/src/mcp-stdio.ts`) | `bun run apps/server/src/mcp-stdio.ts` |
@@ -50,7 +51,9 @@ packages/core/src/
   openai/              whisper-1 transcription, Responses-API structured generation (+web_search), vision, embeddings, PRICING + UsageTracker
   media/               ffmpeg (audio extract, silencedetect chunk planning, scene keyframes, pruning) and yt-dlp wrappers
   pipeline/            types (Providers = everything mockable), runner (checkpointed stage loop), stages/*, segmenter, prompts, context, testkit (fakes)
-  services/            namespaces, ingest (idempotency), jobs, items, events, entities (index upsert + lookup_entity),
+  capture/             page.ts (fetch → Readability/turndown/unpdf → PageContent, SSRF + social guards), links.ts (YouTube links), feeds.ts (RSS/Atom)
+  services/            namespaces, ingest (idempotency), capture (POST /capture → seeded text document), email (inbound webhook payloads → newsletter),
+                       jobs, items, events, entities (index upsert + lookup_entity),
                        search (hybrid RRF + nearestSegments), context, frames (get_frame), documents (TTL cache + presentDocument), export (markdown),
                        graph, sources (subscriptions + polling), inbox (list/archive), summary (namespace summary), chat (item + namespace)
   queue.ts             JobQueue: pg-boss (real Postgres) or in-process serial fallback
@@ -109,6 +112,8 @@ docker/                server.Dockerfile (bun + ffmpeg + yt-dlp); docker-compose
 **Subscriptions, inbox, novelty, summaries (Phase 4).** `services/sources.ts` follows playlists/channels (`sources` table; yt-dlp `--flat-playlist` listing via `listEntries`, injectable) and `pollSource` ingests only unseen uploads; `JobQueue.schedule()` runs `pollAllSources` every `POLL_EVERY_MINUTES` (pg-boss cron on Postgres, a timer on PGlite). The inbox (`services/inbox.ts`) is ready items with `archived_at IS NULL`; "Skip" sets it and logs `skipped`. `stages/novelty.ts` runs once a namespace has ≥5 *other* ready items: per article section, `nearestSegments` over the rest of the corpus → cheap-LLM known/new labels → `Novelty` on the document and `items.novelty`. `services/summary.ts` regenerates `namespaces.summary` on every 3rd ready item (cost rides on that job). `items.summary` is denormalised from the article for the inbox.
 
 **Namespace chat** (`streamNamespaceChat`) = summary + entity headline + item list as the system prompt and AI-SDK tools wrapping the §8 services (`search`, `get_context`, `get_video`, `view_frame`, `lookup_entity`); the model is told to cite `[Title @ MM:SS](/items/ID?t=S)` — `MarkdownLink` turns those into client-side links and `/items/[id]?t=` seeks the player on load. The web `Chat` component takes `{ endpoint, mode }` and works with or without a `PlayerProvider` (`usePlayerOptional`).
+
+**Text sources (Phase 5, PRD §7) reuse the video document.** `createCapture` fetches the page/PDF synchronously (`capture/page.ts`), writes a seeded document (`body_md`, `author`, `linked_videos`, `has_video:false`) at the job's version, and enqueues the job; the fetch stage is then a no-op, transcribe/diarize/frames/vision skip, article/enrich use `textContext` + the `TEXT_*` prompts with `t = null` everywhere, and segments carry no timestamps (deep link = the source URL). Pasted text is keyed `marrow:text:<hash>`, emails `marrow:email:<Message-ID>` — never render those as links (`isWebUrl`). Social URLs (X/LinkedIn/…) are never fetched: they need `text`. `linked_videos` are offered on the item page unless the namespace flag `auto_ingest_links` is set. Feeds are `sources.kind = "rss"`: enclosures → `podcast_episode` via `providers.downloadUrl` (feed metadata kept by the fetch stage), other entries → captures; `FEED_MAX_PER_POLL` caps each poll. Inbound email is `POST /inbound/email/:token` (exempt from the API-key middleware; Postmark/CloudMailin/generic JSON). The web item page swaps the player for `SourceCard` and the Transcript tab for "Text" on text items, and drives an `<audio>` element (`GET /items/:id/audio`) for podcasts through the same `PlayerApi`.
 
 **Events are logged from day one, with no consumer.** `{item, event ∈ ingested|read|chatted|skipped|expression_saved, ts}` — the substrate for a future retention/quiz loop. Wire it everywhere the corresponding action happens.
 
