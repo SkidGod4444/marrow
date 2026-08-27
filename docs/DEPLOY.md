@@ -49,6 +49,8 @@ At your domain registrar's DNS panel (wherever `yourdomain.com` lives — not AW
 
 Caddy inside the compose stack obtains the HTTPS certificate automatically once the name resolves (`dig api.marrow.yourdomain.com` should print the Elastic IP).
 
+**No domain?** Use a free IP-based name: for Elastic IP `3.7.96.159`, set `MARROW_API_DOMAIN=3-7-96-159.sslip.io` — `sslip.io` resolves it to the IP with no signup, and Let's Encrypt issues certificates for it. (DuckDNS is the free alternative if you want a memorable name.) The AWS-provided `ec2-….amazonaws.com` name does **not** work — Let's Encrypt refuses that domain.
+
 ## 5. Prepare the box (10 min)
 
 ```bash
