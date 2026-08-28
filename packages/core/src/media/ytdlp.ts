@@ -89,10 +89,36 @@ export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempt
   }
 }
 
+/**
+ * One yt-dlp call at a time per process, at least `gapMs` apart. Two workers plus retries once made six page requests
+ * in two minutes and YouTube's bot check answered every one; spaced single requests from the same box pass.
+ */
+export function makeGate(gapMs = 8_000, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)), now: () => number = Date.now) {
+  let chain: Promise<unknown> = Promise.resolve();
+  let last = Number.NEGATIVE_INFINITY;
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = chain.then(async () => {
+      const wait = last + gapMs - now();
+      if (wait > 0) await sleep(wait);
+      try {
+        return await fn();
+      } finally {
+        last = now();
+      }
+    });
+    chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
+}
+const youtubeGate = makeGate();
+
 export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: string) => void } = {}): Promise<YtMeta> {
   const jar = await privateCookies(cfg);
   try {
-    const { stdout } = await withBotCheckRetry(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg, process.execPath, jar.path), url]), {
+    const { stdout } = await withBotCheckRetry(() => youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg, process.execPath, jar.path), url])), {
       onRetry: (n) => opts.log?.(`YouTube bot check on metadata — retrying (${n}/2)`),
     });
     return JSON.parse(stdout) as YtMeta;
@@ -112,11 +138,13 @@ export async function download(cfg: Config, url: string, outDir: string, opts: {
   try {
     await withBotCheckRetry(
       () =>
-        exec(cfg.YTDLP_BIN, [
-          "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
-          ...ytdlpArgs(cfg, process.execPath, jar.path),
-          "-o", join(outDir, "source.%(ext)s"), url,
-        ]),
+        youtubeGate(() =>
+          exec(cfg.YTDLP_BIN, [
+            "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
+            ...ytdlpArgs(cfg, process.execPath, jar.path),
+            "-o", join(outDir, "source.%(ext)s"), url,
+          ]),
+        ),
       { onRetry: (n) => opts.log?.(`YouTube bot check on download — retrying (${n}/2)`) },
     );
   } catch (err) {
@@ -141,7 +169,7 @@ export async function listPlaylistEntries(cfg: Config, url: string, opts: { limi
   const jar = await privateCookies(cfg);
   let stdout: string;
   try {
-    ({ stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg, process.execPath, jar.path), target]));
+    ({ stdout } = await youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg, process.execPath, jar.path), target])));
   } finally {
     await jar.cleanup();
   }

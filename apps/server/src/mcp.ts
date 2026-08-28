@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES, itemUsage } from "@marrow/core";
+import { addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES, itemUsage, shouldEnqueue } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { type Principal, can, hasScope, instancePrincipal, resolvePrincipal, scopeOf } from "./principal.ts";
 
@@ -198,7 +198,7 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       if (!can(p, "item", "add")) return denied("add items");
       try {
         const res = await createIngest(deps.db, { namespace, organizationId: scopeOf(p), url, force });
-        if (!res.reused || res.job.state !== "done") await deps.queue.enqueue(res.job.id);
+        if (shouldEnqueue(res.job, res.reused)) await deps.queue.enqueue(res.job.id);
         return text({ job_id: res.job.id, item_id: res.item.id, reused: res.reused, state: res.job.state });
       } catch (err) {
         return fail((err as Error).message);

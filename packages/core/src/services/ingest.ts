@@ -22,6 +22,15 @@ export function inferSourceType(url: string): SourceType {
  * PRD §5 idempotency: one item per (namespace, source_url). A `ready` item is returned as-is unless `force`,
  * which starts a new job at version+1 (derived artifacts are replaced). A failed/queued item resumes its latest job.
  */
+/**
+ * Whether an ingest result should go (back) on the queue: a new job, a job still waiting, or a failed one to resume.
+ * Not one that is running — the broker's singletonKey only covers jobs waiting in `created`, so a second send while
+ * a job is active would start the same pipeline twice, in parallel, on the same document.
+ */
+export function shouldEnqueue(job: { state: string }, reused = true): boolean {
+  return !reused || job.state === "queued" || job.state === "failed";
+}
+
 export async function createIngest(db: Db, input: { namespace: string; organizationId?: string; url: string; sourceType?: SourceType; force?: boolean }): Promise<IngestResult> {
   const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);

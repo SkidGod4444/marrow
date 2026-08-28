@@ -9,7 +9,7 @@ import { isYouTubeUrl } from "../media/ytdlp.ts";
 import { loadDocument, saveDocument } from "../pipeline/runner.ts";
 import type { JobQueue } from "../queue.ts";
 import type { Storage } from "../storage/index.ts";
-import { createIngest } from "./ingest.ts";
+import { createIngest , shouldEnqueue} from "./ingest.ts";
 import { getNamespace } from "./namespaces.ts";
 
 // PRD §7: POST /capture {namespace, url?, text?, author?, note?} → captured_post (or newsletter/paper) document →
@@ -59,7 +59,7 @@ export async function createCapture(deps: CaptureDeps, input: CaptureInput): Pro
   // A bare YouTube link is a video, not a text capture.
   if (!text && rawUrl && isYouTubeUrl(rawUrl)) {
     const res = await createIngest(db, { namespace: ns.id, url: rawUrl, force: input.force });
-    if (!res.reused || res.job.state !== "done") await deps.queue?.enqueue(res.job.id);
+    if (shouldEnqueue(res.job, res.reused)) await deps.queue?.enqueue(res.job.id);
     return { ...res, linked_videos: [], queued_videos: [] };
   }
 
@@ -99,7 +99,7 @@ export async function createCapture(deps: CaptureDeps, input: CaptureInput): Pro
   if (fresh && ns.flags?.auto_ingest_links) {
     for (const v of linked.slice(0, 5)) {
       const r = await createIngest(db, { namespace: ns.id, url: v });
-      if (!r.reused || r.job.state !== "done") await deps.queue?.enqueue(r.job.id);
+      if (shouldEnqueue(r.job, r.reused)) await deps.queue?.enqueue(r.job.id);
       queued.push({ url: v, job_id: r.job.id, item_id: r.item.id });
     }
   }

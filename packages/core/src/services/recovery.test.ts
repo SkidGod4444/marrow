@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { jobs } from "../db/index.ts";
 import { testEnv } from "../pipeline/testkit.ts";
-import { createIngest } from "./ingest.ts";
+import { createIngest, shouldEnqueue } from "./ingest.ts";
 import { failJobIfUnstarted, queueStats, recoverJobs } from "./jobs.ts";
 import { createNamespace } from "./namespaces.ts";
 
@@ -34,6 +34,14 @@ describe("jobs left behind by a previous process", () => {
     expect(stats).toMatchObject({ queued: 1, running: 1, failed: 1 });
     expect(stats.oldest_queued_s).toBeGreaterThanOrEqual(0);
     expect(stats.running_since_progress_s).toBeGreaterThanOrEqual(5 * 60 - 5);
+  });
+
+  it("shouldEnqueue: new, waiting or failed jobs go on the queue; a running one is left alone", () => {
+    expect(shouldEnqueue({ state: "queued" }, false)).toBe(true);
+    expect(shouldEnqueue({ state: "queued" }, true)).toBe(true);
+    expect(shouldEnqueue({ state: "failed" }, true)).toBe(true);
+    expect(shouldEnqueue({ state: "running" }, true)).toBe(false);
+    expect(shouldEnqueue({ state: "done" }, true)).toBe(false);
   });
 
   it("failJobIfUnstarted records a failure that happened before the first stage, once", async () => {

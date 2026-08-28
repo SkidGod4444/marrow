@@ -15,7 +15,7 @@ describe("canonicalizeSourceUrl", () => {
 });
 
 import { readFile, stat } from "node:fs/promises";
-import { explainYtdlpError, privateCookies, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
+import { explainYtdlpError, makeGate, privateCookies, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
 
 describe("yt-dlp on a flagged host", () => {
   it("passes cookies, proxy and extra args through to every call", () => {
@@ -49,6 +49,24 @@ describe("yt-dlp on a flagged host", () => {
     await expect(stat(jar.path!)).rejects.toThrow();
     expect((await stat(file)).size).toBeGreaterThan(0); // untouched
     expect((await privateCookies({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined })).path).toBeNull();
+  });
+
+  it("runs YouTube calls one at a time with a gap between them", async () => {
+    let t = 0;
+    const waits: number[] = [];
+    const gate = makeGate(8_000, async (ms) => void (waits.push(ms), (t += ms)), () => t);
+    const order: string[] = [];
+    const run = (name: string, took: number) =>
+      gate(async () => {
+        order.push(`${name}:start`);
+        t += took;
+        order.push(`${name}:end`);
+        return name;
+      });
+    const results = await Promise.all([run("a", 1000), run("b", 1000), run("c", 1000)]);
+    expect(results).toEqual(["a", "b", "c"]);
+    expect(order).toEqual(["a:start", "a:end", "b:start", "b:end", "c:start", "c:end"]); // never interleaved
+    expect(waits).toEqual([8_000, 8_000]); // the gap after each finished call
   });
 
   it("retries the intermittent bot check a couple of times, other errors not at all", async () => {

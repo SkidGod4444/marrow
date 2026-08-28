@@ -25,7 +25,9 @@ export class PgBossQueue implements JobQueue {
   async start(handler: JobHandler, opts: QueueStartOptions = {}) {
     (this.boss as unknown as NodeJS.EventEmitter).on("error", (err: Error) => console.error("[pg-boss]", err));
     await this.boss.start();
-    await this.boss.createQueue(INGEST_QUEUE);
+    // stately: one job per singletonKey while it is created, active or waiting to retry (a policy is fixed at creation;
+    // queues from before keep "standard", where the app-level guard — shouldEnqueue — does the same job).
+    await this.boss.createQueue(INGEST_QUEUE, { policy: "stately" });
     await this.releaseOrphans();
     // Each `work` registration is an independent worker; N of them = N jobs in flight.
     const workers = Math.max(1, opts.concurrency ?? 1);

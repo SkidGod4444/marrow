@@ -2,7 +2,7 @@ import { type Context, Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item } from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item, shouldEnqueue } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -492,7 +492,7 @@ export function createApp(deps: AppDeps) {
     const body = await c.req.json<{ namespace: string; url: string; force?: boolean }>();
     try {
       const res = await createIngest(deps.db, { ...body, organizationId: scopeOf(p) });
-      if (!res.reused || res.job.state !== "done") await deps.queue.enqueue(res.job.id);
+      if (shouldEnqueue(res.job, res.reused)) await deps.queue.enqueue(res.job.id);
       return c.json({ job_id: res.job.id, item_id: res.item.id, reused: res.reused, state: res.job.state }, res.reused ? 200 : 202);
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400);
