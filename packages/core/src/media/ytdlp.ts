@@ -1,4 +1,5 @@
-import { readdir } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../config.ts";
 import { exec } from "./exec.ts";
@@ -20,13 +21,26 @@ export type YtMeta = {
 /** Flags every yt-dlp call gets: cookies / proxy for hosts YouTube flags, plus anything the operator appends. */
 export type YtdlpConfig = Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS" | "YTDLP_POT_PROVIDER_URL">;
 
-export function ytdlpArgs(cfg: YtdlpConfig, jsRuntime: string | null = process.execPath): string[] {
+/**
+ * yt-dlp writes the cookie jar back after every run — and what it writes back is a shrunken jar (on the box: 637
+ * YouTube cookies at export, 31 after a few runs) that YouTube then rejects. So every run gets a private copy of the
+ * owner's file and the mounted file is never touched (docs/DEPLOY.md). Returns the args and a cleanup.
+ */
+export async function privateCookies(cfg: YtdlpConfig): Promise<{ path: string | null; cleanup: () => Promise<void> }> {
+  if (!cfg.YTDLP_COOKIES) return { path: null, cleanup: async () => undefined };
+  const dir = await mkdtemp(join(tmpdir(), "marrow-cookies-"));
+  const path = join(dir, "cookies.txt");
+  await copyFile(cfg.YTDLP_COOKIES, path);
+  return { path, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
+
+export function ytdlpArgs(cfg: YtdlpConfig, jsRuntime: string | null = process.execPath, cookiesPath: string | null | undefined = cfg.YTDLP_COOKIES): string[] {
   const out: string[] = [];
   // YouTube streams need yt-dlp's JS challenge solver, which needs a JS runtime; only Deno is enabled by default and a
   // bare box has none — "n challenge solving failed", only image formats. Bun is always here (it runs Marrow), so enable
   // it as a fallback; Deno, when installed (the Docker image has it), is preferred automatically.
   if (jsRuntime) out.push("--js-runtimes", `bun:${jsRuntime}`);
-  if (cfg.YTDLP_COOKIES) out.push("--cookies", cfg.YTDLP_COOKIES);
+  if (cookiesPath) out.push("--cookies", cookiesPath);
   if (cfg.YTDLP_PROXY) out.push("--proxy", cfg.YTDLP_PROXY);
   if (cfg.YTDLP_POT_PROVIDER_URL) out.push("--extractor-args", `youtubepot-bgutilhttp:base_url=${cfg.YTDLP_POT_PROVIDER_URL.replace(/\/$/, "")}`);
   if (cfg.YTDLP_EXTRA_ARGS?.trim()) out.push(...cfg.YTDLP_EXTRA_ARGS.trim().split(/\s+/));
@@ -57,11 +71,11 @@ const explained = (cfg: YtdlpConfig, err: unknown): Error => {
 /**
  * YouTube's bot check on cloud addresses comes and goes — the same request, same cookies, passes a minute later
  * (the failing run refreshes the session cookies). So a bot check is retried a couple of times before it fails the
- * stage; the broker's own retries (30 s apart) sit on top of this.
+ * stage; the broker's own retries (a minute apart, backing off) sit on top of this.
  */
 export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; delaysMs?: number[]; sleep?: (ms: number) => Promise<void>; onRetry?: (attempt: number, err: Error) => void } = {}): Promise<T> {
   const attempts = opts.attempts ?? 3;
-  const delays = opts.delaysMs ?? [20_000, 40_000];
+  const delays = opts.delaysMs ?? [45_000, 90_000];
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let i = 0; ; i++) {
     try {
@@ -76,14 +90,17 @@ export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempt
 }
 
 export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: string) => void } = {}): Promise<YtMeta> {
+  const jar = await privateCookies(cfg);
   try {
-    const { stdout } = await withBotCheckRetry(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg), url]), {
+    const { stdout } = await withBotCheckRetry(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg, process.execPath, jar.path), url]), {
       onRetry: (n) => opts.log?.(`YouTube bot check on metadata — retrying (${n}/2)`),
     });
     return JSON.parse(stdout) as YtMeta;
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
     throw explained(cfg, err);
+  } finally {
+    await jar.cleanup();
   }
 }
 
@@ -91,12 +108,13 @@ export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: 
 export async function download(cfg: Config, url: string, outDir: string, opts: { log?: (m: string) => void } = {}): Promise<string> {
   const h = cfg.MAX_VIDEO_HEIGHT;
   const format = `bv*[height<=${h}][ext=mp4]+ba[ext=m4a]/bv*[height<=${h}]+ba/b[height<=${h}]/b`;
+  const jar = await privateCookies(cfg);
   try {
     await withBotCheckRetry(
       () =>
         exec(cfg.YTDLP_BIN, [
           "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
-          ...ytdlpArgs(cfg),
+          ...ytdlpArgs(cfg, process.execPath, jar.path),
           "-o", join(outDir, "source.%(ext)s"), url,
         ]),
       { onRetry: (n) => opts.log?.(`YouTube bot check on download — retrying (${n}/2)`) },
@@ -104,6 +122,8 @@ export async function download(cfg: Config, url: string, outDir: string, opts: {
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
     throw explained(cfg, err);
+  } finally {
+    await jar.cleanup();
   }
   const files = await readdir(outDir);
   const src = files.find((f) => f.startsWith("source."));
@@ -118,7 +138,13 @@ export type PlaylistListing = { title: string | null; entries: PlaylistEntry[] }
 export async function listPlaylistEntries(cfg: Config, url: string, opts: { limit?: number } = {}): Promise<PlaylistListing> {
   const target = channelVideosUrl(url);
   const limit = opts.limit ?? 100;
-  const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg), target]);
+  const jar = await privateCookies(cfg);
+  let stdout: string;
+  try {
+    ({ stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg, process.execPath, jar.path), target]));
+  } finally {
+    await jar.cleanup();
+  }
   const j = JSON.parse(stdout) as { title?: string; entries?: Array<{ id?: string; title?: string; url?: string; _type?: string; entries?: unknown[] }> };
   const entries: PlaylistEntry[] = [];
   for (const e of j.entries ?? []) {

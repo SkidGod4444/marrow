@@ -52,7 +52,7 @@ export class PgBossQueue implements JobQueue {
   async enqueue(jobId: string) {
     // singletonKey: one broker job per pipeline job at a time. expireInSeconds bounds a hung stage (a stuck download)
     // before the job is retried; a normal hour-long video finishes well inside it.
-    await this.boss.send(INGEST_QUEUE, { jobId }, { singletonKey: jobId, retryLimit: 2, retryDelay: 30, expireInSeconds: 3600 });
+    await this.boss.send(INGEST_QUEUE, { jobId }, { singletonKey: jobId, retryLimit: 3, retryDelay: 60, retryBackoff: true, expireInSeconds: 3600 });
   }
   async schedule(name: string, everyMinutes: number, fn: () => Promise<void>) {
     const m = Math.max(1, Math.min(59, Math.round(everyMinutes)));

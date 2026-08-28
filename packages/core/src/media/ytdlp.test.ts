@@ -14,7 +14,8 @@ describe("canonicalizeSourceUrl", () => {
   });
 });
 
-import { explainYtdlpError, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
+import { readFile, stat } from "node:fs/promises";
+import { explainYtdlpError, privateCookies, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
 
 describe("yt-dlp on a flagged host", () => {
   it("passes cookies, proxy and extra args through to every call", () => {
@@ -36,6 +37,20 @@ describe("yt-dlp on a flagged host", () => {
     expect(explainYtdlpError("ERROR: [youtube] x: Sign in to confirm you’re not a bot.", { hasCookies: true })).toMatch(/rejected this server's session just now/);
   });
 
+  it("gives every run a private copy of the cookies and never touches the owner's file", async () => {
+    const dir = await import("node:fs/promises").then((fs) => fs.mkdtemp("/tmp/marrow-jar-"));
+    const file = `${dir}/cookies.txt`;
+    await import("node:fs/promises").then((fs) => fs.writeFile(file, "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n"));
+    const jar = await privateCookies({ YTDLP_COOKIES: file, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined });
+    expect(jar.path).not.toBe(file);
+    expect(await readFile(jar.path!, "utf8")).toContain("SID\tabc");
+    expect(ytdlpArgs({ YTDLP_COOKIES: file, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined }, null, jar.path)).toEqual(["--cookies", jar.path]);
+    await jar.cleanup();
+    await expect(stat(jar.path!)).rejects.toThrow();
+    expect((await stat(file)).size).toBeGreaterThan(0); // untouched
+    expect((await privateCookies({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined })).path).toBeNull();
+  });
+
   it("retries the intermittent bot check a couple of times, other errors not at all", async () => {
     let n = 0;
     const flaky = async () => {
@@ -45,7 +60,7 @@ describe("yt-dlp on a flagged host", () => {
     };
     const waits: number[] = [];
     expect(await withBotCheckRetry(flaky, { sleep: async (ms) => void waits.push(ms) })).toBe("ok");
-    expect([n, waits]).toEqual([3, [20_000, 40_000]]);
+    expect([n, waits]).toEqual([3, [45_000, 90_000]]);
     n = 0;
     await expect(withBotCheckRetry(flaky, { attempts: 2, sleep: async () => undefined })).rejects.toThrow(/not a bot/);
     expect(n).toBe(2);

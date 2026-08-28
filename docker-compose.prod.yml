@@ -14,7 +14,7 @@ services:
       YTDLP_POT_PROVIDER_URL: http://pot-provider:4416 # PO tokens for YouTube (see the service below)
     volumes:
       - workdata:/data
-      - ./secrets:/secrets # writable: yt-dlp refreshes youtube-cookies.txt as YouTube rotates it (docs/DEPLOY.md)
+      - ./secrets:/secrets:ro # yt-dlp works on a private copy per run; the owner's file is never rewritten (docs/DEPLOY.md)
     restart: unless-stopped
     # A deploy replaces the container: give the server time to finish the stage it is on (it waits up to 90 s for
     # in-flight jobs); anything still unfinished is re-queued when the new container boots.
