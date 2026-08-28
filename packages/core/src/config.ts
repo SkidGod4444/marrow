@@ -55,6 +55,10 @@ export const ConfigSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   STT_MODEL: z.string().default("whisper-1"),
   STT_MAX_BYTES: z.coerce.number().default(25 * 1024 * 1024),
+  // Longest audio chunk sent to the STT API, in seconds. The byte cap alone let a 2.6-hour interview become two 80-minute
+  // chunks, which the API timed out on; ten-minute pieces transcribe in about a minute each, three at a time.
+  STT_CHUNK_MAX_S: z.coerce.number().int().min(60).default(600),
+  STT_REQUEST_TIMEOUT_MS: z.coerce.number().int().default(15 * 60_000),
   // STACK:diarization — second STT pass for multi-speaker audio. auto = podcast/interview heuristics or namespace flag.
   DIARIZE: z.enum(["auto", "always", "off"]).default("auto"),
   DIARIZE_MODEL: z.string().default("gpt-4o-transcribe-diarize"),

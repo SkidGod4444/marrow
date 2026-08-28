@@ -12,12 +12,15 @@ export type SttResult = { language: string | null; duration: number; text: strin
  */
 export async function transcribeFile(cfg: Config, path: string, usage: UsageTracker): Promise<SttResult> {
   const openai = getOpenAI(cfg);
-  const res = await openai.audio.transcriptions.create({
+  const res = await openai.audio.transcriptions.create(
+    {
     file: createReadStream(path),
     model: cfg.STT_MODEL,
     response_format: "verbose_json",
     timestamp_granularities: ["word", "segment"],
-  });
+    },
+    { timeout: cfg.STT_REQUEST_TIMEOUT_MS }, // a ten-minute chunk transcribes in ~1 min; the default would cut long ones off
+  );
   const duration = Number(res.duration ?? 0);
   usage.add(cfg.STT_MODEL, { audio_seconds: duration, requests: 1 });
   return {

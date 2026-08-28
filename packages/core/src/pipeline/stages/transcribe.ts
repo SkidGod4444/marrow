@@ -9,6 +9,17 @@ import type { StageFn } from "../types.ts";
 import { ensureLocal, round2 } from "./helpers.ts";
 
 /** Stage 2 — whisper-1 with word timestamps; silence-split when the audio exceeds the 25 MB cap. */
+/**
+ * How long a chunk may be: the smaller of what fits the byte cap (with headroom) and the duration cap — or null when the
+ * whole file fits both. The target sits at 80% of the max so the silence search has room on either side.
+ */
+export function chunkLimits(input: { size: number; duration: number; maxBytes: number; maxSeconds: number }): { target: number; max: number } | null {
+  const byBytes = input.size > input.maxBytes ? Math.floor((input.maxBytes * 0.9) / (input.size / Math.max(1, input.duration))) : Number.POSITIVE_INFINITY;
+  const max = Math.min(byBytes, input.maxSeconds);
+  if (input.size <= input.maxBytes && input.duration <= input.maxSeconds) return null;
+  return { target: Math.floor(max * 0.8), max };
+}
+
 export const transcribeStage: StageFn = async (ctx) => {
   const { doc, item, providers, workDir, config, usage, log } = ctx;
   if (isTextSource(doc.source_type)) return { skipped: "text source" };
@@ -17,14 +28,13 @@ export const transcribeStage: StageFn = async (ctx) => {
   const size = (await stat(audioPath)).size;
 
   const chunks: Array<{ path: string; offset: number }> = [];
-  if (size <= config.STT_MAX_BYTES) {
+  const { duration } = await providers.probe(audioPath);
+  const limits = chunkLimits({ size, duration, maxBytes: config.STT_MAX_BYTES, maxSeconds: config.STT_CHUNK_MAX_S });
+  if (!limits) {
     chunks.push({ path: audioPath, offset: 0 });
   } else {
-    const { duration } = await providers.probe(audioPath);
-    const bytesPerSec = size / Math.max(1, duration);
-    const max = Math.floor((config.STT_MAX_BYTES * 0.9) / bytesPerSec);
-    const plan = planChunks(duration, await providers.detectSilences(audioPath), { target: max * 0.8, max });
-    log(`audio is ${(size / 1e6).toFixed(1)} MB (> cap) — splitting into ${plan.length} chunks at silences`);
+    const plan = planChunks(duration, await providers.detectSilences(audioPath), limits);
+    log(`audio is ${(size / 1e6).toFixed(1)} MB / ${Math.round(duration / 60)} min — splitting into ${plan.length} chunks at silences (≤ ${Math.round(limits.max / 60)} min each)`);
     const dir = join(workDir, "chunks");
     await mkdir(dir, { recursive: true });
     for (const [i, c] of plan.entries()) {

@@ -74,6 +74,7 @@ export type FakeOptions = { durationS?: number; hasVideo?: boolean; failAt?: key
 /** A 20-minute talk with 3 chapters, 6 scene changes, 2 references. Deterministic. */
 export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Record<string, number> } {
   const duration = opts.durationS ?? 1200;
+  const chunkLen = new Map<string, number>(); // chunk file → seconds, so fake transcripts add up to the whole
   const calls: Record<string, number> = {};
   const hit = (name: keyof Providers) => {
     calls[name] = (calls[name] ?? 0) + 1;
@@ -125,8 +126,9 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       hit("detectSilences");
       return [];
     },
-    async cutAudio(_src, _s, _e, out) {
+    async cutAudio(_src, s, e, out) {
       hit("cutAudio");
+      chunkLen.set(out, e - s); // the fake transcribe then speaks for exactly this piece (timestamps relative to it)
       await writeFile(out, "fake-chunk");
     },
     async cutClip(_src, _s, _e, out) {
@@ -155,19 +157,20 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       }
       return out;
     },
-    async transcribe(_path, usage) {
+    async transcribe(path, usage) {
       hit("transcribe");
+      const d = chunkLen.get(path) ?? duration;
       if (topic.includes("broken")) throw new Error("simulated transcription failure");
       if (topic.includes("slow")) await new Promise((r) => setTimeout(r, 8000)); // lets the UI show a job in flight
-      usage.add("whisper-1", { audio_seconds: duration, requests: 1 });
+      usage.add("whisper-1", { audio_seconds: d, requests: 1 });
       const segments: Array<{ start: number; end: number; text: string }> = [];
       const ws: Array<{ word: string; start: number; end: number }> = [];
-      for (let t = 0; t < duration; t += 10) {
+      for (let t = 0; t < d; t += 10) {
         const text = `${words[(t / 10) % words.length]} ${words[(t / 10 + 3) % words.length]} on ${topic}: we talk about the Tobin et al paper and domain randomization at ${t}.`;
         segments.push({ start: t, end: t + 10, text });
         text.split(" ").forEach((w, i) => ws.push({ word: w, start: t + i * 0.5, end: t + i * 0.5 + 0.4 }));
       }
-      return { language: "en", duration, text: segments.map((s) => s.text).join(" "), segments, words: ws };
+      return { language: "en", d, text: segments.map((s) => s.text).join(" "), segments, words: ws };
     },
     async diarize(_path, o, usage) {
       hit("diarize");
