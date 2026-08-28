@@ -23,7 +23,7 @@ async function tryPermission() {
 $("connect").addEventListener("click", async () => {
   $("connect").disabled = true; $("setupNote").textContent = "Checking…";
   try {
-    const who = await connect($("key").value);
+    await connect($("key").value);
     $("setupNote").textContent = "";
     await main();
   } catch (err) {

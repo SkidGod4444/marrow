@@ -89,7 +89,7 @@
 
   // ---- YouTube: inside the player's right controls ----
   function injectYouTube() {
-    if (!/^\/watch/.test(location.pathname)) return;
+    if (!location.pathname.startsWith("/watch")) return;
     const controls = document.querySelector(".ytp-right-controls");
     if (!controls || controls.querySelector(".marrow-save")) return;
     const btn = el("button", { class: "ytp-button marrow-save", title: TITLE, "aria-label": "Save to Marrow" }, [icon(24)]);
