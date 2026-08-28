@@ -242,3 +242,11 @@ Owner asked to upgrade the box from `t4g.micro` to `t4g.small`. Measured why: 1 
 ## 2026-08-28 — Production verified end to end
 
 After the day's fixes (S3 role + IMDS hop limit, YouTube cookies, JS runtime for yt-dlp, job recovery, 2 workers, `t4g.small` + swap) the live instance ingested a real 11-minute YouTube talk through every stage — fetch, transcribe ($0.065), keyframes, vision ($0.008), article ($0.003), references ($0.014), index — for **$0.09**, well inside the PRD's ≤ $1/hour target. `/health` on the API now answers the three questions that mattered today: which commit, can it store, is the queue moving. Docs (README, DEPLOY, STACK, CLAUDE.md) describe the setup as it actually runs. (PRD §5, §14)
+
+## 2026-08-28 — Spend per item, everything included
+
+Owner: "for each video or post or item it should also log and show how much tokens used total including everything". The job already carried per-stage usage, but chat spend went nowhere and nothing summed per item. Now a single ledger table (`usage_log`) receives a row per model per unit of work — pipeline stages, namespace-summary refreshes, per-video and namespace chat turns — and the item's figure is a sum over rows (re-ingests add up; a retried stage replaces its rows). The chip on the item page reads `$0.09 · 52k tokens` with the full ledger on hover; inbox and library show dollars; logs print tokens per stage and per ingest. Provider list prices from `PRICING`; chat web-search tool calls are not itemised (the SDK reports no count). Pre-ledger jobs are backfilled at boot from their stage records. (PRD §5 cost target, §11 events)
+
+## 2026-08-28 — Chat crash on "What's on screen now"
+
+Reproduced against the real model on a local live stack: when the model starts a tool call, the part's input is still undefined while streaming and the vendored AI Elements `ToolInput` rendered `CodeBlock` with `JSON.stringify(undefined)` → `code.split` threw inside a render → the whole page fell into the error boundary ("This page couldn't load"). The fake chat never emitted tool calls, so E2E never saw it. Fixed in both vendored components (guard undefined) and the fake model now calls `view_frame` for "screen" questions so the tool-part path is covered. Likely the same crash the owner saw twice earlier that day.

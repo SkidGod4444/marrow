@@ -18,6 +18,7 @@ export * from "./pipeline/context.ts";
 export * from "./services/namespaces.ts";
 export * from "./services/ingest.ts";
 export * from "./services/jobs.ts";
+export * from "./services/usage.ts";
 export * from "./services/items.ts";
 export * from "./services/events.ts";
 export * from "./services/entities.ts";

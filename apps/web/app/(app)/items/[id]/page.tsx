@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UsageChip } from "@/components/marrow/usage-chip";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
@@ -55,7 +56,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
       </div>
     );
   }
-  const [doc, lang] = await Promise.all([api.document(id), api.expressions(id).catch(() => null)]);
+  const [doc, lang, usage] = await Promise.all([api.document(id), api.expressions(id).catch(() => null), api.usage(id).catch(() => null)]);
   void api.event(id, "read");
 
   return (
@@ -70,6 +71,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
           {doc.duration_s ? <span>{fmtTs(doc.duration_s)}</span> : null}
           {doc.language && <span className="uppercase">{doc.language}</span>}
           {doc.frames.length > 0 && <span>{doc.frames.length} keyframes</span>}
+          {usage && <UsageChip usage={usage} />}
           {isWebUrl(doc.source_url) && (
             <a href={doc.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-foreground">
               source

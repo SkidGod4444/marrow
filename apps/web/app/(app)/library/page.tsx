@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { fmtUsd } from "@/lib/format";
 import { IngestProgress } from "@/components/marrow/ingest-progress";
 import { IngestForm } from "@/components/marrow/ingest-form";
 import { LanguageModeToggle } from "@/components/marrow/namespace-flags";
@@ -79,7 +80,10 @@ export default async function LibraryPage() {
                       {item.sourceType !== "youtube_video" && <span className="hidden rounded-md border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">{kindLabel(item.sourceType)}</span>}
                       <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground sm:block">{item.channel}</span>
                       {item.status === "ready" ? (
-                        <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.durationS ? fmtTs(item.durationS) : ""}</span>
+                        <span className="w-28 text-right font-mono text-xs text-muted-foreground">
+                          {item.durationS ? fmtTs(item.durationS) : ""}
+                          {item.usage && item.usage.cost_usd > 0 ? <span title="API spend"> · {fmtUsd(item.usage.cost_usd)}</span> : null}
+                        </span>
                       ) : item.job && item.status !== "failed" ? (
                         <IngestProgress job={item.job} sourceType={item.sourceType} durationS={item.durationS} compact />
                       ) : (

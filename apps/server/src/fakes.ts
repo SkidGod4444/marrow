@@ -41,6 +41,8 @@ const FEED = `<?xml version="1.0"?><rss version="2.0"><channel><title>Robot Talk
 </channel></rss>`;
 
 /** Streams a plausible cited answer; namespace chats get a cross-item citation, item chats a timestamp. */
+const USAGE = { inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 5, text: 5, reasoning: undefined }, raw: undefined };
+
 function fakeChatModel() {
   return new MockLanguageModelV3({
     doStream: async ({ prompt }) => {
@@ -53,6 +55,21 @@ function fakeChatModel() {
       const text = ns
         ? `Two items cover this. ${ids[0] ? `[${ids[0].title} @ 05:00](/items/${ids[0].id}?t=300)` : ""} discusses domain randomization; ${ids[1] ? `[${ids[1].title} @ 13:20](/items/${ids[1].id}?t=800)` : ""} covers actuator backlash. ${question.includes("screen") ? "(no screen)" : ""}`
         : `The speaker introduces domain randomization at [00:10] and the Tobin et al. paper at [02:00]${question.includes("screen") ? "; on screen right now is a slide of loss curves" : ""}.`;
+      // A "what's on screen" question first calls view_frame (as the real model does), then answers with the frame in hand.
+      const askedScreen = question.includes("screen");
+      const sawTool = prompt.some((m) => m.role === "tool");
+      if (!ns && askedScreen && !sawTool) {
+        return {
+          stream: simulateReadableStream({
+            chunkDelayInMs: 5,
+            chunks: [
+              { type: "stream-start", warnings: [] },
+              { type: "tool-call", toolCallId: "call_frame_1", toolName: "view_frame", input: JSON.stringify({ t: 100 }) },
+              { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage: USAGE },
+            ],
+          }),
+        };
+      }
       const chunks = text.split(/(?<=\s)/).map((delta) => ({ type: "text-delta" as const, id: "t1", delta }));
       return {
         stream: simulateReadableStream({
@@ -62,7 +79,7 @@ function fakeChatModel() {
             { type: "text-start", id: "t1" },
             ...chunks,
             { type: "text-end", id: "t1" },
-            { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: { inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 5, text: 5, reasoning: undefined }, raw: undefined } },
+            { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: USAGE },
           ],
         }),
       };

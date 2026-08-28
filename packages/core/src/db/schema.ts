@@ -307,6 +307,33 @@ export const events = pgTable("events", {
   ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * The spend ledger (PRD §5 "every stage logs its API spend", extended to everything): one row per model per unit of
+ * work — a pipeline stage of a job, a namespace-summary refresh, a chat turn — so an item's total is a sum, not a guess.
+ */
+export const usageLog = pgTable(
+  "usage_log",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id").references(() => items.id, { onDelete: "cascade" }), // null for namespace-level work
+    namespaceId: text("namespace_id").references(() => namespaces.id, { onDelete: "cascade" }),
+    userId: text("user_id"), // who chatted; null for the pipeline
+    jobId: text("job_id"), // pipeline rows: the job (unique with stage + model, so a retried stage replaces its row)
+    source: text("source").notNull(), // pipeline | summary | chat | namespace_chat
+    stage: text("stage"),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    audioSeconds: doublePrecision("audio_seconds").notNull().default(0),
+    requests: integer("requests").notNull().default(0),
+    costUsd: doublePrecision("cost_usd").notNull().default(0),
+    ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("usage_log_item_idx").on(t.itemId), index("usage_log_ns_idx").on(t.namespaceId), uniqueIndex("usage_log_job_stage_model_uq").on(t.jobId, t.stage, t.model)],
+);
+export type UsageRow = typeof usageLog.$inferSelect;
+
 export const jobs = pgTable(
   "jobs",
   {

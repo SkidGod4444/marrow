@@ -122,6 +122,10 @@ export const VideoDocumentSchema = z.object({
   pipeline: z.object({
     version: z.number().default(1),
     stages_completed: z.array(z.enum(STAGE_NAMES)).default([]),
+    // What the pipeline spent on this document (all stages of this version); chat spend lives in the usage ledger.
+    usage: z
+      .object({ input_tokens: z.number(), cached_input_tokens: z.number(), output_tokens: z.number(), total_tokens: z.number(), audio_seconds: z.number(), requests: z.number(), cost_usd: z.number() })
+      .optional(),
   }),
 });
 export type VideoDocument = z.infer<typeof VideoDocumentSchema>;

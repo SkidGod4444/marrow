@@ -36,10 +36,19 @@ test.describe("item page: reader, chat, transcript, share (PRD §6.1–6.2)", ()
     await expect(answer).toBeVisible({ timeout: 15_000 });
     // [00:10] became a clickable timecode
     await expect(answer.getByRole("link", { name: "00:10" }).or(answer.getByRole("button", { name: /00:10/ })).first()).toBeVisible();
-    const box = page.getByPlaceholder(/ask about this video/i);
-    await box.fill("What is on screen?");
-    await box.press("Enter");
+    // "What's on screen" makes the model call view_frame first: the tool card (streaming input → frame) must render,
+    // never crash the page (a streaming tool call has no input yet — that once threw inside CodeBlock).
+    const onScreen = page.getByRole("button", { name: /what.s on screen now/i });
+    if (await onScreen.isVisible()) await onScreen.click();
+    else {
+      const box = page.getByPlaceholder(/ask about this video/i);
+      await box.fill("What is on screen?");
+      await box.press("Enter");
+    }
+    await expect(page.getByText(/view_frame|View frame/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("img", { name: /frame at 01:40|slide|keyframe/i }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/slide of loss curves/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("This page couldn't load")).toHaveCount(0);
   });
 
   test("ask-about-section seeds the chat with the section", async ({ page }) => {

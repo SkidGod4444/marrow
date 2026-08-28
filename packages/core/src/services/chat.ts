@@ -1,4 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { recordChatUsage } from "./usage.ts";
 import { type LanguageModel, type UIMessage, convertToModelMessages, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 import type { Config } from "../config.ts";
@@ -103,7 +104,7 @@ export function videoChatTools(deps: ChatDeps, doc: VideoDocument) {
   };
 }
 
-export type VideoChatInput = { doc: VideoDocument; messages: UIMessage[]; playbackT?: number | null };
+export type VideoChatInput = { doc: VideoDocument; messages: UIMessage[]; playbackT?: number | null; userId?: string | null };
 
 /** Streams a UI-message response (AI SDK protocol) for `useChat`. */
 export async function streamVideoChat(deps: ChatDeps, input: VideoChatInput): Promise<Response> {
@@ -119,6 +120,10 @@ export async function streamVideoChat(deps: ChatDeps, input: VideoChatInput): Pr
     stopWhen: stepCountIs(6),
     providerOptions: {
       openai: { reasoningEffort: "low", textVerbosity: "medium", promptCacheKey: `marrow:${input.doc.id}:v${input.doc.pipeline.version}` },
+    },
+    // Every turn lands in the spend ledger, so the item's total includes what people asked it.
+    onFinish: async ({ totalUsage }) => {
+      await recordChatUsage(deps.db, { itemId: input.doc.id, namespaceId: input.doc.namespace_id, userId: input.userId ?? null, model: config.LLM_MODEL_CHAT, usage: totalUsage, source: "chat" }).catch(() => undefined);
     },
   });
   return result.toUIMessageStreamResponse();
@@ -256,7 +261,7 @@ export function namespaceChatTools(deps: NamespaceChatDeps, ns: Namespace) {
   };
 }
 
-export async function streamNamespaceChat(deps: NamespaceChatDeps, input: { namespace: Namespace; messages: UIMessage[] }): Promise<Response> {
+export async function streamNamespaceChat(deps: NamespaceChatDeps, input: { namespace: Namespace; messages: UIMessage[]; userId?: string | null }): Promise<Response> {
   const { config } = deps;
   const model = deps.model ?? createOpenAI({ apiKey: config.OPENAI_API_KEY })(config.LLM_MODEL_CHAT);
   const tools = namespaceChatTools(deps, input.namespace);
@@ -267,6 +272,9 @@ export async function streamNamespaceChat(deps: NamespaceChatDeps, input: { name
     tools,
     stopWhen: stepCountIs(10),
     providerOptions: { openai: { reasoningEffort: "low", textVerbosity: "medium", promptCacheKey: `marrow:ns:${input.namespace.id}` } },
+    onFinish: async ({ totalUsage }) => {
+      await recordChatUsage(deps.db, { namespaceId: input.namespace.id, userId: input.userId ?? null, model: config.LLM_MODEL_CHAT, usage: totalUsage, source: "namespace_chat" }).catch(() => undefined);
+    },
   });
   return result.toUIMessageStreamResponse();
 }

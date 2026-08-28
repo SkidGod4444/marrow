@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats } from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -162,7 +162,7 @@ export function createApp(deps: AppDeps) {
     if (!n) return c.json({ error: "namespace not found" }, 404);
     const body = await c.req.json<{ messages: UIMessage[] }>();
     if (!Array.isArray(body.messages) || !body.messages.length) return c.json({ error: "messages are required" }, 400);
-    return streamNamespaceChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel, embedQuery: deps.embedQuery, rerank: deps.rerank }, { namespace: n, messages: body.messages });
+    return streamNamespaceChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel, embedQuery: deps.embedQuery, rerank: deps.rerank }, { namespace: n, userId: userOf(c.get("principal")), messages: body.messages });
   });
 
   // ---- Subscriptions (PRD §6.4) ----
@@ -326,6 +326,11 @@ export function createApp(deps: AppDeps) {
     return item ? c.json({ item }) : c.json({ error: "item not found" }, 404);
   });
 
+  app.get("/items/:id/usage", async (c) => {
+    const item = await ownItem(c, c.req.param("id"));
+    return item ? c.json({ usage: await itemUsage(deps.db, item.id) }) : c.json({ error: "item not found" }, 404);
+  });
+
   app.get("/items/:id/document", async (c) => {
     if (!(await ownItem(c, c.req.param("id")))) return c.json({ error: "document not found" }, 404);
     const doc = await getDocument(deps.storage, c.req.param("id"));
@@ -416,7 +421,7 @@ export function createApp(deps: AppDeps) {
     const body = await c.req.json<{ messages: UIMessage[]; playback_t?: number | null }>();
     if (!Array.isArray(body.messages) || !body.messages.length) return c.json({ error: "messages are required" }, 400);
     await logEvent(deps.db, id, "chatted", userOf(p));
-    return streamVideoChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel }, { doc, messages: body.messages, playbackT: body.playback_t ?? null });
+    return streamVideoChat({ config: deps.config, storage: deps.storage, db: deps.db, model: deps.chatModel }, { doc, messages: body.messages, playbackT: body.playback_t ?? null, userId: userOf(p) });
   });
 
   // ---- Activity events (PRD §11) ----

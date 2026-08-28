@@ -1,6 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
-import type { ExpressionView, InboxEntry, Item, ItemWithJob, NamespaceGraph, NamespaceSummary, ReviewCard, Source, VideoDocument } from "@marrow/core";
+import type { ExpressionView, InboxEntry, Item, ItemUsage, ItemWithJob, NamespaceGraph, NamespaceSummary, ReviewCard, Source, VideoDocument } from "@marrow/core";
 import { ApiError, fetchWithRetry, readJson } from "./http";
 
 export { ApiError };
@@ -45,6 +45,7 @@ export const api = {
   namespaces: () => apiFetch<{ namespaces: NamespaceSummary[] }>("/namespaces").then((r) => r.namespaces),
   items: (namespace: string, status?: string) => apiFetch<{ items: ItemWithJob[] }>(`/items?namespace=${encodeURIComponent(namespace)}${status ? `&status=${status}` : ""}`).then((r) => r.items),
   item: (id: string) => apiFetch<{ item: Item }>(`/items/${id}`).then((r) => r.item),
+  usage: (id: string) => apiFetch<{ usage: ItemUsage }>(`/items/${id}/usage`).then((r) => r.usage),
   document: (id: string) => apiFetch<PresentedDocument>(`/items/${id}/document?transcript=full`),
   graph: (namespace: string) => apiFetch<NamespaceGraph>(`/namespaces/${encodeURIComponent(namespace)}/graph`),
   namespace: (ref: string) => apiFetch<{ namespaces: NamespaceSummary[] }>("/namespaces").then((r) => r.namespaces.find((n) => n.name === ref || n.id === ref) ?? null),

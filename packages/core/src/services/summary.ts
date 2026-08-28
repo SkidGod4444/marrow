@@ -11,7 +11,7 @@ export type SummaryDeps = {
 };
 
 /** PRD §9: the standing namespace summary — what the corpus covers, themes, disagreements. */
-export async function refreshNamespaceSummary(deps: SummaryDeps, namespaceId: string): Promise<{ summary: string; cost: number }> {
+export async function refreshNamespaceSummary(deps: SummaryDeps, namespaceId: string): Promise<{ summary: string; cost: number; usage: Record<string, number> }> {
   const { db } = deps;
   const ready = await db.select().from(items).where(and(eq(items.namespaceId, namespaceId), eq(items.status, "ready"))).orderBy(desc(items.createdAt)).limit(60);
   const ents = await db
@@ -44,13 +44,13 @@ export async function refreshNamespaceSummary(deps: SummaryDeps, namespaceId: st
     usage,
   );
   await db.update(namespaces).set({ summary: out.summary }).where(eq(namespaces.id, namespaceId));
-  return { summary: out.summary, cost: usage.cost };
+  return { summary: out.summary, cost: usage.cost, usage: usage.usage };
 }
 
 export const SUMMARY_EVERY = 3;
 
 /** Regenerate after every `SUMMARY_EVERY` ready items (or when there is none yet). Returns null when nothing was done. */
-export async function maybeRefreshNamespaceSummary(deps: SummaryDeps, namespaceId: string): Promise<{ summary: string; cost: number } | null> {
+export async function maybeRefreshNamespaceSummary(deps: SummaryDeps, namespaceId: string): Promise<{ summary: string; cost: number; usage: Record<string, number> } | null> {
   const [ns] = await deps.db.select().from(namespaces).where(eq(namespaces.id, namespaceId));
   if (!ns) return null;
   const [row] = await deps.db.select({ n: sql<number>`count(*)::int` }).from(items).where(and(eq(items.namespaceId, namespaceId), eq(items.status, "ready")));

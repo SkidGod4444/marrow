@@ -1,12 +1,13 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Db, type Item, items, namespaces } from "../db/index.ts";
 import { type JobProgress, jobProgress, latestJobsFor } from "./jobs.ts";
+import { usageByItem } from "./usage.ts";
 import { logEvent } from "./events.ts";
 import { getNamespace } from "./namespaces.ts";
 
 // PRD §6.4 watch inbox: ready items you haven't skipped, newest first, with summary + novelty verdict.
 
-export type InboxEntry = Item & { namespace: { id: string; name: string }; job?: JobProgress };
+export type InboxEntry = Item & { namespace: { id: string; name: string }; job?: JobProgress; usage?: { cost_usd: number; tokens: number } };
 
 export async function listInbox(db: Db, opts: { organizationId?: string; namespace?: string; includeArchived?: boolean; limit?: number } = {}): Promise<{ entries: InboxEntry[]; pending: InboxEntry[] }> {
   const ns = opts.namespace ? await getNamespace(db, opts.namespace, opts.organizationId) : null;
@@ -28,6 +29,11 @@ export async function listInbox(db: Db, opts: { organizationId?: string; namespa
       const j = latest.get(e.id);
       if (j) e.job = jobProgress(j);
     }
+  }
+  const spend = await usageByItem(db, all.map((e) => e.id));
+  for (const e of all) {
+    const u = spend.get(e.id);
+    if (u) e.usage = u;
   }
   return { entries: all.filter((e) => e.status === "ready"), pending };
 }

@@ -1,8 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES,
-} from "@marrow/core";
+import { addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES, itemUsage } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { type Principal, can, hasScope, instancePrincipal, resolvePrincipal, scopeOf } from "./principal.ts";
 
@@ -366,7 +364,7 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       if (!p) return fail(NO_AUTH);
       const s = await getJobStatus(deps.db, job_id);
       if (s && !(await ownItem(p, s.item.id))) return fail(`job ${job_id} not found`);
-      return s ? text({ job_id: s.job.id, state: s.job.state, version: s.job.version, cost_usd: s.job.costUsd, error: s.job.error, item: s.item, stages: s.progress }) : fail(`job ${job_id} not found`);
+      return s ? text({ job_id: s.job.id, state: s.job.state, version: s.job.version, cost_usd: s.job.costUsd, error: s.job.error, item: s.item, stages: s.progress, usage: await itemUsage(deps.db, s.item.id) }) : fail(`job ${job_id} not found`);
     },
   );
 

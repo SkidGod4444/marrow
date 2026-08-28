@@ -1,4 +1,6 @@
 import { rm } from "node:fs/promises";
+import { addTotals, describeUsage, jobTotals, recordPipelineUsage, splitTrackerUsage, zeroTotals } from "../services/usage.ts";
+import { costUsd } from "../openai/client.ts";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import type { Config } from "../config.ts";
@@ -37,6 +39,13 @@ export async function saveDocument(storage: Storage, doc: VideoDocument): Promis
  * Runs one pipeline job (PRD §5): stages in order, each checkpointed in `jobs.stages` so a failed run resumes at the
  * failed stage; the document is persisted after every stage. `opts.stages` forces specific stages to re-run.
  */
+/** Per-stage totals for the log line (the tracker is flat "<model>.<metric>"). */
+function trackerTotals(flat: Record<string, number>) {
+  let t = zeroTotals();
+  for (const [model, u] of Object.entries(splitTrackerUsage(flat))) t = addTotals(t, { input_tokens: u.input_tokens, cached_input_tokens: u.cached_input_tokens, output_tokens: u.output_tokens, audio_seconds: u.audio_seconds, requests: u.requests, cost_usd: costUsd(model, u) });
+  return t;
+}
+
 export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?: StageName[] } = {}): Promise<Job> {
   const { db, storage, config, providers } = deps;
   const log = (msg: string) => deps.log?.(msg);
@@ -103,9 +112,10 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
       } else {
         rec.state = "done";
         if (!doc.pipeline.stages_completed.includes(stage)) doc.pipeline.stages_completed.push(stage);
-        log(`[${stage}] done${usage.cost ? ` ($${usage.cost.toFixed(4)})` : ""}`);
+        log(`[${stage}] done${Object.keys(usage.usage).length ? ` (${describeUsage({ ...trackerTotals(usage.usage), cost_usd: usage.cost })})` : ""}`);
       }
       job.costUsd = round6(job.costUsd + usage.cost);
+      await recordPipelineUsage(db, { itemId: item.id, namespaceId: namespace.id, jobId: job.id, stage, usage: usage.usage }).catch((e) => log(`[${stage}] usage ledger: ${String(e)}`));
       await saveDocument(storage, doc);
       await saveJob();
     } catch (err) {
@@ -116,6 +126,7 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
       rec.usage = usage.usage;
       rec.cost_usd = usage.cost;
       job.costUsd = round6(job.costUsd + usage.cost);
+      await recordPipelineUsage(db, { itemId: item.id, namespaceId: namespace.id, jobId: job.id, stage, usage: usage.usage }).catch(() => undefined);
       job.state = "failed";
       job.error = `${stage}: ${message}`;
       await saveDocument(storage, doc).catch(() => undefined);
@@ -128,6 +139,8 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
 
   job.state = "done";
   job.stage = null;
+  doc.pipeline.usage = jobTotals(job); // the document carries what it cost to make
+  await saveDocument(storage, doc);
   await saveJob();
   await db
     .update(items)
@@ -150,6 +163,7 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
     if (refreshed) {
       job.costUsd = round6(job.costUsd + refreshed.cost);
       await saveJob();
+      await recordPipelineUsage(db, { itemId: item.id, namespaceId: namespace.id, jobId: job.id, stage: "summary", source: "summary", usage: refreshed.usage }).catch(() => undefined);
       log(`namespace summary refreshed ($${refreshed.cost.toFixed(4)})`);
     }
   } catch (err) {
@@ -159,7 +173,7 @@ export async function runJob(deps: PipelineDeps, jobId: string, opts: { stages?:
   // Derived artifacts are in storage; the raw download and scratch files are no longer needed.
   await storage.deletePrefix(rawPrefix(item.id)).catch((e) => log(`cleanup raw/: ${String(e)}`));
   await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
-  log(`ingest complete — total cost $${job.costUsd.toFixed(4)}`);
+  log(`ingest complete — ${describeUsage({ ...jobTotals(job), cost_usd: job.costUsd })}`);
   return job;
 }
 

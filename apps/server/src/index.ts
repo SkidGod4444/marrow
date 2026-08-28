@@ -1,4 +1,4 @@
-import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob, recoverJobs, failJobIfUnstarted, probeStorage } from "@marrow/core";
+import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob, recoverJobs, failJobIfUnstarted, probeStorage, backfillUsageFromJobs } from "@marrow/core";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { pollDeps, realRetrieval } from "./deps.ts";
@@ -40,6 +40,8 @@ await queue.start(
 );
 // Whatever the previous process left queued or running (a deploy restarts the server) goes back on the queue now.
 await recoverJobs(db, queue, (m) => console.log(`[queue] ${m}`));
+// Jobs from before the spend ledger existed get their rows from the stage records they carry (idempotent).
+await backfillUsageFromJobs(db, (m) => console.log(`[usage] ${m}`)).catch((e) => console.error("[usage] backfill failed:", e));
 
 // PRD §6.4/§7: poll subscribed playlists/channels/feeds on a schedule (pg-boss cron on Postgres, a timer on PGlite).
 if (config.POLL_EVERY_MINUTES > 0) {

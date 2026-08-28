@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { itemUsage } from "../services/usage.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { entities, jobs, mentions, segments } from "../db/index.ts";
 import { documentKey, rawPrefix } from "../document.ts";
@@ -54,6 +55,13 @@ describe("pipeline runner (Phase 1 acceptance)", () => {
     // Cost logged per stage and in total (PRD §13).
     const status = await getJobStatus(env.db, job.id);
     expect(status!.job.costUsd).toBeGreaterThan(0);
+    // the spend ledger has every stage that called an API, and the document carries the pipeline total
+    const spend = await itemUsage(env.db, status!.item.id);
+    expect(spend.total.cost_usd).toBeCloseTo(status!.job.costUsd, 4);
+    expect(spend.stages.map((s) => s.stage)).toContain("transcribe");
+    // the document carries the stages' own spend (the namespace-summary refresh rides on the job but is not part of the document)
+    const stageCost = spend.stages.filter((s) => s.stage !== "summary").reduce((n, s) => n + s.cost_usd, 0);
+    expect((await loadDocument(env.storage, status!.item.id))?.pipeline.usage?.cost_usd).toBeCloseTo(stageCost, 4);
     expect(status!.progress.find((p) => p.stage === "transcribe")!.cost_usd).toBeCloseTo(0.36, 2);
     expect(status!.progress.find((p) => p.stage === "diarize")!.state).toBe("skipped");
     expect(status!.item.status).toBe("ready");

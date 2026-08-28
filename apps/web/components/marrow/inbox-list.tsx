@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kindLabel } from "@/lib/kind";
+import { fmtUsd } from "@/lib/format";
 import { stageLabel } from "@/lib/stages";
 import { useArchiveMutation, useIngestMutation } from "@/lib/queries";
 import { IngestProgress } from "./ingest-progress";
@@ -126,6 +127,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 {e.channel && <span>{e.channel}</span>}
                 {e.durationS ? <span>{fmtTs(e.durationS)}</span> : null}
                 <span>{fmtDay(e.createdAt)}</span>
+                {e.usage && e.usage.cost_usd > 0 && <span title="API spend so far, everything included">{fmtUsd(e.usage.cost_usd)}</span>}
               </p>
               <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">
                 <Link href={`/items/${e.id}`} className="hover:underline">
