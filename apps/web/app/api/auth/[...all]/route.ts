@@ -1,4 +1,4 @@
-import { API_URL } from "@/lib/api";
+import { API_URL, apiHeaders } from "@/lib/api";
 
 // Better Auth lives on the API server; this route forwards /api/auth/* there and passes cookies both ways, so the
 // browser only ever talks to the web app's origin. No API key is involved: these endpoints are public by design.
@@ -12,8 +12,10 @@ async function forward(req: Request, ctx: RouteContext<"/api/auth/[...all]">): P
     const v = req.headers.get(h);
     if (v) headers.set(h, v);
   }
-  // Better Auth checks Origin against its trusted origins: always the web app's own origin.
+  // Better Auth checks Origin against its trusted origins: always the web app's own origin. The API key identifies
+  // this proxy so the server trusts that origin even before MARROW_WEB_URL is configured.
   headers.set("origin", url.origin);
+  for (const [k, v] of Object.entries(apiHeaders())) if (k.toLowerCase() === "x-api-key") headers.set(k, v);
   const upstream = await fetch(`${API_URL}/api/auth/${all.join("/")}${url.search}`, {
     method: req.method,
     headers,
