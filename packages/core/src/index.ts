@@ -21,6 +21,7 @@ export * from "./services/ingest.ts";
 export * from "./services/jobs.ts";
 export * from "./services/usage.ts";
 export * from "./services/items.ts";
+export * from "./services/move.ts";
 export * from "./services/events.ts";
 export * from "./services/entities.ts";
 export * from "./services/documents.ts";

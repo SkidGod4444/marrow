@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES, itemUsage, shouldEnqueue } from "@marrow/core";
+import { addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES, itemUsage, shouldEnqueue, moveItem } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { type Principal, can, hasScope, instancePrincipal, resolvePrincipal, scopeOf } from "./principal.ts";
 
@@ -365,6 +365,27 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       const s = await getJobStatus(deps.db, job_id);
       if (s && !(await ownItem(p, s.item.id))) return fail(`job ${job_id} not found`);
       return s ? text({ job_id: s.job.id, state: s.job.state, version: s.job.version, cost_usd: s.job.costUsd, error: s.job.error, item: s.item, stages: s.progress, usage: await itemUsage(deps.db, s.item.id) }) : fail(`job ${job_id} not found`);
+    },
+  );
+
+  server.registerTool(
+    "move_item",
+    {
+      title: "Move an item to another namespace",
+      description: "Move an item (same workspace). Its search index and entity mentions follow; novelty is recomputed and, in a language-mode namespace, expressions are extracted.",
+      inputSchema: { item_id: z.string(), namespace: z.string().describe("Target namespace name or id") },
+    },
+    async ({ item_id, namespace }, extra) => {
+      const p = await who(extra);
+      if (!p) return fail(NO_AUTH);
+      if (!can(p, "item", "add")) return denied("move items");
+      if (!(await ownItem(p, item_id))) return fail(`item ${item_id} not found`);
+      try {
+        const r = await moveItem({ db: deps.db, storage: deps.storage, queue: deps.queue }, { itemId: item_id, namespace, organizationId: scopeOf(p) });
+        return text({ item_id: r.item.id, from: r.from.name, to: r.to.name, job_id: r.job?.id ?? null, replaced: r.replaced });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
     },
   );
 

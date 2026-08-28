@@ -77,6 +77,19 @@ export function useIngestMutation() {
   });
 }
 
+// ---- Move an item to another namespace ----
+export function useMoveItem(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { namespace: string }) => proxy<{ from: string; to: string; job_id: string | null; replaced: string | null }>(`items/${itemId}/move`, { method: "POST", body: JSON.stringify(v) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.namespaces });
+      void qc.invalidateQueries({ queryKey: keys.expressions(itemId) });
+    },
+    onError: (err) => toast.error("Couldn't move it", { description: err.message }),
+  });
+}
+
 // ---- Ingest progress: poll a job while it is in flight ----
 export function useJobProgress(jobId: string, active: boolean) {
   return useQuery<JobProgress>({

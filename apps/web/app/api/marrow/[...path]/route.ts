@@ -10,7 +10,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const ALLOW =
-  /^(public\/(items|items\/[^/]+|items\/[^/]+\/(audio|events|export\.md|export\.txt)|frames\/[^/]+)|me|items\/[^/]+\/(chat|events|archive|usage|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
+  /^(public\/(items|items\/[^/]+|items\/[^/]+\/(audio|events|export\.md|export\.txt)|frames\/[^/]+)|me|items\/[^/]+\/(chat|events|archive|usage|move|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {
   const { path } = await ctx.params;

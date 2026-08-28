@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MoveItem } from "@/components/marrow/move-item";
 import { UsageChip } from "@/components/marrow/usage-chip";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -64,6 +65,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
       <header className="shrink-0 space-y-2">
         <h1 className="reading max-w-4xl text-[24px] font-semibold leading-[1.15] tracking-[-0.01em] sm:text-[30px]">{doc.title}</h1>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
+          <MoveItem itemId={item.id} namespaceId={item.namespaceId} />
           {doc.source_type !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(doc.source_type)}</span>}
           {doc.author && <span>{doc.author}</span>}
           {doc.channel && doc.channel !== doc.author && <span>{doc.channel}</span>}

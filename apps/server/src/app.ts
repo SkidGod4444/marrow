@@ -2,7 +2,7 @@ import { type Context, Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item, shouldEnqueue } from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item, shouldEnqueue, moveItem } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -388,6 +388,21 @@ export function createApp(deps: AppDeps) {
   app.get("/items/:id", async (c) => {
     const item = await ownItem(c, c.req.param("id"));
     return item ? c.json({ item }) : c.json({ error: "item not found" }, 404);
+  });
+
+  app.post("/items/:id/move", async (c) => {
+    const p = c.get("principal");
+    if (!can(p, "item", "add")) return deny(c);
+    const item = await ownItem(c, c.req.param("id"));
+    if (!item) return c.json({ error: "item not found" }, 404);
+    const body = await c.req.json<{ namespace?: string }>().catch(() => ({}) as { namespace?: string });
+    if (!body.namespace) return c.json({ error: "namespace is required" }, 400);
+    try {
+      const r = await moveItem({ db: deps.db, storage: deps.storage, queue: deps.queue }, { itemId: item.id, namespace: body.namespace, organizationId: scopeOf(p) });
+      return c.json({ item: r.item, from: r.from.name, to: r.to.name, job_id: r.job?.id ?? null, replaced: r.replaced, reindexed: r.reindexed });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   app.get("/items/:id/usage", async (c) => {

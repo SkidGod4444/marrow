@@ -30,16 +30,18 @@ test.describe("inbox (PRD §6.4)", () => {
     const entry = page.locator("li").filter({ has: page.getByRole("link", { name: "Read" }) }).filter({ has: page.getByRole("button", { name: "Skip" }) }).first();
     const title = (await entry.getByRole("heading", { level: 2 }).textContent())?.trim() ?? "";
     expect(title.length).toBeGreaterThan(0);
+    const same = page.getByRole("heading", { level: 2, name: title, exact: true }); // other specs may ingest the same link (same title) concurrently
+    const before = await same.count();
     await entry.getByRole("button", { name: "Skip" }).click();
     await expect(page.getByText("Skipped", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toHaveCount(0);
+    await expect(same).toHaveCount(before - 1);
     await page.getByRole("link", { name: "Show skipped" }).click();
-    const skipped = page.locator("li").filter({ has: page.getByRole("heading", { level: 2, name: title, exact: true }) });
+    const skipped = page.locator("li").filter({ has: same }).filter({ has: page.getByRole("button", { name: "Unskip" }) });
     await expect(skipped).toHaveCount(1);
     await skipped.getByRole("button", { name: "Unskip" }).click();
     await expect(page.getByText("Back in the inbox")).toBeVisible();
     await page.getByRole("link", { name: "Hide skipped" }).click();
-    await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toHaveCount(1);
+    await expect(same).toHaveCount(before);
   });
 
   test("novelty verdict links deep into the item", async ({ page }) => {
