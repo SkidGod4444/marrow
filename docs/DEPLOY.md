@@ -242,3 +242,13 @@ The server applies pending Drizzle migrations (`packages/core/src/db/migrations/
 - **1 GB is not enough.** A `t4g.micro` gets OOM-killed by its own image build; `t4g.small` + the 2 GB swap from step 5 is the floor.
 - **A job stuck on "Queued"** means the worker tried and hit something before the first stage — `/health` (`storage`, `queue`) and the inbox card's *Reason:* line say what; the raw text is in `docker compose logs server`.
 - When credits run out, the bill is the ~$40/mo above; nothing here needs a Savings Plan.
+
+## Cookies without the scp dance — the Chrome extension
+
+Instead of exporting `cookies.txt` from a private window and copying it to `/secrets`, load `apps/extension` unpacked in a
+**dedicated Chrome profile signed in to the spare YouTube account** (never watch YouTube in that profile). In its Options set
+the API address and an owner's API key. The popup shows `/health.youtube` and `youtube_session`; *Send cookies now* posts
+the profile's jar to `POST /youtube/cookies`, which validates it, writes `YTDLP_COOKIES` atomically and re-probes YouTube.
+With *auto* on, the extension checks `/health` hourly and sends only when the server reports `cookies_stale` / `blocked`
+or the keeper says `signed_out` — a healthy, server-rotated jar is never overwritten. The keeper imports the new jar on its
+next hourly tick. Adding a YouTube video from the popup while the session is stale sends the cookies first.

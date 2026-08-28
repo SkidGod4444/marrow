@@ -9,7 +9,7 @@ import {
 /** Everything both skins (REST + MCP) need. `embedQuery`/`rerank` are injectable so tests never call OpenAI. */
 export type ServerDeps = {
   /** Live health of things the pipeline needs (set by index.ts; tests may omit). */
-  health?: { storage: () => "ok" | "error" | "unknown"; youtube?: () => string; keeper?: () => Promise<unknown> };
+  health?: { storage: () => "ok" | "error" | "unknown"; youtube?: () => string; keeper?: () => Promise<unknown>; recheckYoutube?: () => Promise<void> };
   db: Db;
   storage: Storage;
   config: Config;

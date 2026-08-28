@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="popup">
+    <header>
+      <span class="mark"></span>
+      <strong>Marrow</strong>
+      <a id="options" href="#" class="quiet" style="margin-left:auto">Options</a>
+    </header>
+
+    <section id="add" class="card">
+      <p class="eyebrow" id="kind">This tab</p>
+      <p id="title" class="title">—</p>
+      <p id="preview" class="preview"></p>
+      <div class="row">
+        <select id="namespace" class="select"></select>
+        <button id="go" class="key">Add to Marrow</button>
+      </div>
+      <p id="addNote" class="note"></p>
+    </section>
+
+    <section class="card">
+      <p class="eyebrow">YouTube session on the server</p>
+      <dl class="status">
+        <dt>YouTube</dt><dd id="youtube">—</dd>
+        <dt>Keeper</dt><dd id="keeper">—</dd>
+        <dt>This profile</dt><dd id="profile">—</dd>
+        <dt>Last sent</dt><dd id="last">—</dd>
+      </dl>
+      <div class="row">
+        <button id="send" class="key">Send cookies now</button>
+        <span id="note" class="note"></span>
+      </div>
+    </section>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

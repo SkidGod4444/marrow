@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="options">
+    <header>
+      <span class="mark"></span>
+      <strong>Marrow</strong>
+      <span class="eyebrow">options</span>
+    </header>
+    <label>API address<input id="apiUrl" type="url" placeholder="https://api.your-marrow.example" spellcheck="false" /></label>
+    <label>API key<input id="apiKey" type="password" placeholder="mrw_… (Settings → API keys), or the instance key" spellcheck="false" /></label>
+    <label>Workspace slug <span class="quiet">only with the instance key</span><input id="org" type="text" placeholder="my-lab" spellcheck="false" /></label>
+    <label>Web app address <span class="quiet">for "Open in Marrow" links</span><input id="webUrl" type="url" placeholder="https://your-marrow.example" spellcheck="false" /></label>
+    <label class="check"><input id="auto" type="checkbox" /> Send this profile's YouTube cookies automatically when the server reports a stale session (checked hourly)</label>
+    <p class="note">
+      For the cookies, use a dedicated Chrome profile signed in to a spare YouTube account, and don't watch YouTube in it — a
+      session used in two places gets rotated out from under the server. Nothing here logs you in; you sign in yourself.
+    </p>
+    <div class="row">
+      <button id="save" class="key">Save</button>
+      <span id="msg" class="quiet"></span>
+    </div>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

@@ -78,7 +78,7 @@ const keeperStatus = async () => {
     return null;
   }
 };
-const health = { storage: () => storageStatus, youtube: () => youtubeStatus, keeper: keeperStatus };
+const health = { storage: () => storageStatus, youtube: () => youtubeStatus, keeper: keeperStatus, recheckYoutube: checkYoutube };
 const deps = fakeDeps ? { db, storage, config, queue, auth, health, ...fakeDeps } : { db, storage, config, queue, auth, health, ...realRetrieval(config) };
 const app = createApp(deps);
 

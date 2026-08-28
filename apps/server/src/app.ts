@@ -2,7 +2,7 @@ import { type Context, Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item, shouldEnqueue, moveItem } from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item, shouldEnqueue, moveItem, installCookieJar } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -388,6 +388,25 @@ export function createApp(deps: AppDeps) {
   app.get("/items/:id", async (c) => {
     const item = await ownItem(c, c.req.param("id"));
     return item ? c.json({ item }) : c.json({ error: "item not found" }, 404);
+  });
+
+  // ---- YouTube cookies from the owner's browser (apps/extension): validate, install, re-probe ----
+  app.post("/youtube/cookies", async (c) => {
+    const p = c.get("principal");
+    if (p.role !== "instance" && p.role !== "owner") return c.json({ error: "only an owner can install YouTube cookies" }, 403);
+    const type = c.req.header("content-type") ?? "";
+    let text: string;
+    if (type.includes("application/json")) {
+      const body = await c.req.json<{ cookies?: string }>().catch(() => ({}) as { cookies?: string });
+      text = body.cookies ?? "";
+    } else text = await c.req.text();
+    try {
+      const r = await installCookieJar(deps.config.YTDLP_COOKIES, text);
+      void deps.health?.recheckYoutube?.().catch(() => undefined); // /health.youtube tells the result in a minute
+      return c.json({ ok: true, cookies: r.cookies, checking: Boolean(deps.health?.recheckYoutube) });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   app.post("/items/:id/move", async (c) => {

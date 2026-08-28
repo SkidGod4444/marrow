@@ -22,6 +22,7 @@ export * from "./services/jobs.ts";
 export * from "./services/usage.ts";
 export * from "./services/items.ts";
 export * from "./services/move.ts";
+export * from "./services/youtube-cookies.ts";
 export * from "./services/events.ts";
 export * from "./services/entities.ts";
 export * from "./services/documents.ts";

@@ -100,4 +100,32 @@ describe("REST app (Phase 1 endpoints)", () => {
     expect((await app.request("/namespaces", { headers: { "x-api-key": "secret" } })).status).toBe(200);
     expect((await app.request("/namespaces", { headers: { authorization: "Bearer secret" } })).status).toBe(200);
   });
+
+  it("installs a YouTube cookie jar from the owner's browser and re-probes", async () => {
+    const { mkdtemp, readFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = await mkdtemp(join(tmpdir(), "marrow-jar-"));
+    const path = join(dir, "cookies.txt");
+    let rechecked = 0;
+    const app = createApp({
+      ...env,
+      config: { ...env.config, MARROW_API_KEY: "secret", YTDLP_COOKIES: path },
+      queue: new InProcessQueue(),
+      embedQuery: async (q) => fakeEmbedding(q),
+      health: { storage: () => "ok", youtube: () => "cookies_stale", recheckYoutube: async () => void rechecked++ },
+    });
+    const far = Math.floor(Date.now() / 1000) + 86_400 * 300;
+    const jar = ["SID", "HSID", "SSID", "APISID", "SAPISID"].map((n) => `.youtube.com\tTRUE\t/\tTRUE\t${far}\t${n}\tv`).join("\n");
+    const noKey = await app.request("/youtube/cookies", { method: "POST", headers: { "content-type": "text/plain" }, body: jar });
+    expect(noKey.status).toBe(401);
+    const bad = await app.request("/youtube/cookies", { method: "POST", headers: { "content-type": "text/plain", "x-api-key": "secret" }, body: "nothing here" });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toMatch(/no cookies found/);
+    const ok = await app.request("/youtube/cookies", { method: "POST", headers: { "content-type": "application/json", "x-api-key": "secret" }, body: JSON.stringify({ cookies: jar }) });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ ok: true, cookies: 5, checking: true });
+    expect(rechecked).toBe(1);
+    expect((await readFile(path, "utf8")).split("\n").filter((l) => l.includes("\tSID\t"))).toHaveLength(1);
+  });
 });
