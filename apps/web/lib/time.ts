@@ -40,6 +40,16 @@ export function linkifyTimestamps(md: string): string {
   return linked.replace(/\uE000(\d+)\uE000/g, (_m, i: string) => keep[Number(i)]!);
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "4 Sep" (this year) or "4 Sep 2027" — UTC-deterministic like fmtDate, but for people rather than logs. `today` fixes the year reference in tests. */
+export function fmtDay(value: string | Date | null | undefined, today: Date = new Date()): string {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "";
+  const base = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return d.getUTCFullYear() === today.getUTCFullYear() ? base : `${base} ${d.getUTCFullYear()}`;
+}
+
 /** Deterministic YYYY-MM-DD in UTC — identical on the server and in the browser, so it never causes hydration mismatches. */
 export function fmtDate(value: string | Date | null | undefined): string {
   if (!value) return "";

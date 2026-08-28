@@ -23,7 +23,7 @@ test.describe("language mode + review queue", () => {
     await expect(row.getByRole("button", { name: "Learning" })).toBeVisible();
     await expect(row.getByText(/in review · next/)).toBeVisible();
     // the review nav badge is only for due items (none yet); the Review page lists it as upcoming
-    await page.getByRole("link", { name: /^review/i }).click();
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /^review/i }).click();
     await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
     await expect(page.getByText(/nothing due right now/i)).toBeVisible();
     await expect(page.getByText("Coming up")).toBeVisible();
@@ -36,7 +36,7 @@ test.describe("language mode + review queue", () => {
     await api(`/items/${ep.id}/expressions/${n}/save`, { method: "POST" });
     const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
     await page.goto(`/review?now=${encodeURIComponent(future)}`);
-    await expect(page.getByText(/\d+ due/)).toBeVisible();
+    await expect(page.getByText(/card 1 of \d+/)).toBeVisible();
     const card = page.getByRole("heading", { level: 2 }).first();
     await expect(card).toBeVisible();
     await page.getByRole("button", { name: /show meaning/i }).click();

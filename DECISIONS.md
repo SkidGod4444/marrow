@@ -178,3 +178,7 @@ The axe scan in the E2E suite now includes `color-contrast`. Tokens were re-tune
 - **Review queue is a table (`expression_reviews`)**, not document state: "learn" marks, stage and due date are the owner's data and must survive re-ingests (which replace the document). Schedule: 2d → 7d → 30d, then every 30d; "again" restarts at 2d. Answers are stamped with real time; `?now=` on `/reviews` exists only so tests and demos can time-travel.
 - **Language mode is a per-namespace switch** (library toggle → `PATCH /namespaces/:ref`, new-namespace checkbox); turning it on later and re-running an item (`--force`) adds the pack without redoing transcription (stage checkpoints).
 - The nav shows **Review** always (so the feature is discoverable) with a due-count badge; the page explains where expressions come from when the queue is empty.
+
+## 2026-08-28 — Language mode / review UX pass
+
+Expressions carry the sentence they were said in (`context`, stored on the review row too — migration 0004): recall works on a phrase in context, not a phrase alone. The Language tab shows the quote with the phrase highlighted (long lines windowed to ~160 chars), top-aligned controls, human dates ("next prompt 4 Sep" via `fmtDay`, UTC-deterministic), tooltips on Play/Learn, and a "Review →" shortcut once something is saved. The review card shows "card N of M" with a progress bar, a *Later* button (defers within the session, key L), the context quote on reveal, what each answer does to the schedule, and hides keyboard hints on phones.

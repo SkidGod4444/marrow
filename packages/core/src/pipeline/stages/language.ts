@@ -13,7 +13,7 @@ import { ensureLocal, round2 } from "./helpers.ts";
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}']+/gu, " ").trim();
 
-export type Span = { t_start: number; t_end: number; exact: boolean };
+export type Span = { t_start: number; t_end: number; exact: boolean; context: string };
 
 /** Locate an expression inside the transcript near `t`: exact word-run match first, else the closest line's span. */
 export function locateSpan(transcript: TranscriptEntry[], text: string, t: number): Span | null {
@@ -34,14 +34,14 @@ export function locateSpan(transcript: TranscriptEntry[], text: string, t: numbe
         if (ok) {
           const first = words[i]!;
           const last = words[i + want.length - 1]!;
-          return { t_start: round2(first.t), t_end: round2(last.t_end ?? last.t + 0.4), exact: true };
+          return { t_start: round2(first.t), t_end: round2(last.t_end ?? last.t + 0.4), exact: true, context: e.text.trim().slice(0, 240) };
         }
       }
     }
   }
   // Fallback: the line itself (still a short, playable span).
   const line = near.find(({ e }) => norm(e.text).includes(want.join(" ")))?.e ?? near[0]!.e;
-  return { t_start: round2(line.t_start), t_end: round2(line.t_end), exact: false };
+  return { t_start: round2(line.t_start), t_end: round2(line.t_end), exact: false, context: line.text.trim().slice(0, 240) };
 }
 
 export const languageStage: StageFn = async (ctx) => {
@@ -74,10 +74,10 @@ export const languageStage: StageFn = async (ctx) => {
     try {
       await providers.cutClip(audioPath, span.t_start, span.t_end, local);
       await storage.putFile(key, local, "audio/mp4");
-      expressions.push({ text: x.text, kind: x.kind, explanation: x.explanation, t_start: span.t_start, t_end: span.t_end, clip_s3_key: key });
+      expressions.push({ text: x.text, kind: x.kind, explanation: x.explanation, context: span.context, t_start: span.t_start, t_end: span.t_end, clip_s3_key: key });
     } catch (err) {
       log(`clip ${n} failed (${(err as Error).message}) — keeping the expression without audio`);
-      expressions.push({ text: x.text, kind: x.kind, explanation: x.explanation, t_start: span.t_start, t_end: span.t_end });
+      expressions.push({ text: x.text, kind: x.kind, explanation: x.explanation, context: span.context, t_start: span.t_start, t_end: span.t_end });
     }
   }
   doc.language_pack = { expressions };

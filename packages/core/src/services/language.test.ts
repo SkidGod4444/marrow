@@ -14,9 +14,9 @@ describe("language mode (PRD §6.3)", () => {
       { t_start: 0, t_end: 4, speaker: "S1", text: "We talk about the Tobin paper.", words: [{ w: "We", t: 0, t_end: 0.3 }, { w: "talk", t: 0.4, t_end: 0.7 }, { w: "about", t: 0.8, t_end: 1.1 }, { w: "the", t: 1.2, t_end: 1.3 }, { w: "Tobin", t: 1.4, t_end: 1.8 }, { w: "paper.", t: 1.9, t_end: 2.3 }] },
       { t_start: 4, t_end: 8, speaker: "S1", text: "Backlash is hard.", words: [{ w: "Backlash", t: 4, t_end: 4.5 }, { w: "is", t: 4.6, t_end: 4.7 }, { w: "hard.", t: 4.8, t_end: 5.2 }] },
     ];
-    expect(locateSpan(transcript, "talk about", 0)).toEqual({ t_start: 0.4, t_end: 1.1, exact: true });
-    expect(locateSpan(transcript, "Tobin paper", 3)).toEqual({ t_start: 1.4, t_end: 2.3, exact: true });
-    expect(locateSpan(transcript, "not in there", 4)).toEqual({ t_start: 4, t_end: 8, exact: false });
+    expect(locateSpan(transcript, "talk about", 0)).toEqual({ t_start: 0.4, t_end: 1.1, exact: true, context: "We talk about the Tobin paper." });
+    expect(locateSpan(transcript, "Tobin paper", 3)).toEqual({ t_start: 1.4, t_end: 2.3, exact: true, context: "We talk about the Tobin paper." });
+    expect(locateSpan(transcript, "not in there", 4)).toEqual({ t_start: 4, t_end: 8, exact: false, context: "Backlash is hard." });
     expect(locateSpan([], "x", 0)).toBeNull();
   });
 

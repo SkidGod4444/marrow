@@ -155,6 +155,7 @@ export const expressionReviews = pgTable(
     text: text("text").notNull(),
     kind: text("kind").notNull(),
     explanation: text("explanation").notNull(),
+    context: text("context"),
     tStart: real("t_start").notNull(),
     tEnd: real("t_end").notNull(),
     clipKey: text("clip_key"),

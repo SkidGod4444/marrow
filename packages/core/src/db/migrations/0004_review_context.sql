@@ -1,0 +1,1 @@
+ALTER TABLE "expression_reviews" ADD COLUMN "context" text;

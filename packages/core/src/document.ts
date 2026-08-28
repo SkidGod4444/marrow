@@ -68,6 +68,8 @@ export const ExpressionSchema = z.object({
   t_start: z.number(),
   t_end: z.number(),
   explanation: z.string(),
+  /** The transcript line it was spoken in — the context a learner recalls it by. */
+  context: z.string().optional(),
   clip_s3_key: z.string().optional(),
 });
 export const LanguagePackSchema = z.object({ expressions: z.array(ExpressionSchema) });

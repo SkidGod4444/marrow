@@ -23,6 +23,7 @@ export type ExpressionView = {
   text: string;
   kind: string;
   explanation: string;
+  context: string | null;
   t_start: number;
   t_end: number;
   /** Relative API path of the clip (null when the clip could not be cut). */
@@ -50,6 +51,7 @@ export function presentExpressions(doc: VideoDocument, saved: Map<number, Expres
     text: e.text,
     kind: e.kind,
     explanation: e.explanation,
+    context: e.context ?? null,
     t_start: e.t_start,
     t_end: e.t_end,
     clip_url: e.clip_s3_key ? `/items/${doc.id}/clips/${n}` : null,
@@ -69,7 +71,7 @@ export async function saveExpression(deps: { db: Db; storage: Storage }, itemId:
   if (existing) return existing;
   const [row] = await deps.db
     .insert(expressionReviews)
-    .values({ id: newId("rev"), itemId, n, text: e.text, kind: e.kind, explanation: e.explanation, tStart: e.t_start, tEnd: e.t_end, clipKey: e.clip_s3_key ?? null, stage: 0, dueAt: nextDue(0) })
+    .values({ id: newId("rev"), itemId, n, text: e.text, kind: e.kind, explanation: e.explanation, context: e.context ?? null, tStart: e.t_start, tEnd: e.t_end, clipKey: e.clip_s3_key ?? null, stage: 0, dueAt: nextDue(0) })
     .returning();
   await logEvent(deps.db, itemId, "expression_saved");
   return row!;
