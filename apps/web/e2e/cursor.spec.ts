@@ -1,4 +1,5 @@
-import { type Page, expect, readyItem, test } from "./helpers";
+import type { Page } from "@playwright/test";
+import { expect, readyItem, test } from "./helpers";
 
 // Owner rule: every clickable shows cursor: pointer. Two ways something is clickable — it carries a React click handler
 // (found through React's props on the DOM node) or it has an interactive role. Anything else the browser default
@@ -6,7 +7,7 @@ import { type Page, expect, readyItem, test } from "./helpers";
 const INTERACTIVE = 'button, a[href], summary, select, label[for], [role="button"], [role="link"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="slider"]';
 
 async function offenders(page: Page): Promise<string[]> {
-  return page.evaluate((selector) => {
+  return page.evaluate((selector: string) => {
     const ALLOWED = new Set(["pointer", "grab", "grabbing"]);
     const out = new Set<string>();
     const describe = (el: Element) => {
