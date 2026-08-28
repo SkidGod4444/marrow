@@ -1,81 +1,114 @@
-import { capturePost, classify, exportJar, getSettings, getState, ingestVideo, listNamespaces, needsCookies, sendCookies } from "./lib.js";
+import { capturePost, classify, getSettings, ingestVideo, listNamespaces, needsCookies, saveSettings, sendCookies, whoAmI } from "./lib.js";
+import { DEFAULT_API_URL, DEFAULT_WEB_URL } from "./config.js";
 
 const $ = (id) => document.getElementById(id);
-const ago = (t) => (t ? `${Math.max(1, Math.round((Date.now() - t) / 60000))} min ago` : "never");
+const show = (id) => { for (const v of document.querySelectorAll(".view")) v.hidden = v.id !== id; $("gear").hidden = id !== "main"; };
 const send = (msg) => new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
 
-let settings, tab, page, post = null, health = null;
+let settings, page, tab, post = null;
+
+// ---- connect ----
+async function connect(key) {
+  const trial = { ...settings, apiKey: key.trim() };
+  const me = await whoAmI(trial);
+  const who = { name: me.user?.name || me.user?.email || "you", workspace: me.active?.name || null, role: me.active?.role || me.user?.via || null };
+  await saveSettings({ apiKey: trial.apiKey, who });
+  settings = await getSettings();
+  return who;
+}
+async function tryPermission() {
+  // the default address is in the manifest; a custom one needs Chrome's say-so once
+  try { return await chrome.permissions.request({ origins: [`${new URL(settings.apiUrl).origin}/*`] }); } catch { return true; }
+}
+$("connect").addEventListener("click", async () => {
+  $("connect").disabled = true; $("setupNote").textContent = "Checking…";
+  try {
+    const who = await connect($("key").value);
+    $("setupNote").textContent = "";
+    await main();
+  } catch (err) {
+    $("setupNote").textContent = err.message;
+  } finally {
+    $("connect").disabled = false;
+  }
+});
+$("key").addEventListener("keydown", (e) => { if (e.key === "Enter") $("connect").click(); });
+$("openKeys").addEventListener("click", (e) => { e.preventDefault(); chrome.tabs.create({ url: `${settings.webUrl}/settings` }); });
+
+// ---- main ----
+function whoLine() {
+  const w = settings.who;
+  $("who").textContent = w ? [w.workspace, w.name].filter(Boolean).join(" · ") : "";
+}
 
 async function loadNamespaces() {
   const sel = $("namespace");
-  sel.innerHTML = "";
+  sel.innerHTML = '<option value="">loading…</option>';
   try {
     const list = await listNamespaces(settings);
-    if (!list.length) { sel.innerHTML = '<option value="">no namespaces yet</option>'; return; }
+    sel.innerHTML = "";
+    if (!list.length) { sel.innerHTML = '<option value="">no namespaces yet</option>'; $("go").disabled = true; $("addNote").innerHTML = `Create a namespace in Marrow first. <a href="${settings.webUrl}/library" target="_blank" rel="noreferrer">Open the library ↗</a>`; return; }
     for (const n of list) {
       const o = document.createElement("option");
       o.value = n.name; o.textContent = n.name; if (n.name === settings.lastNamespace) o.selected = true;
       sel.appendChild(o);
     }
   } catch (err) {
-    sel.innerHTML = `<option value="">${err.message}</option>`;
+    sel.innerHTML = '<option value="">—</option>'; $("addNote").textContent = err.message;
+    if (/API key/.test(err.message)) show("setup");
   }
 }
 
 async function showTab() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   page = classify(tab?.url);
-  const kindLabel = { youtube: "YouTube video", x: "Post on X", linkedin: "LinkedIn post", none: "This tab" }[page.kind];
-  $("kind").textContent = kindLabel;
+  $("kind").textContent = { youtube: "( youtube video )", x: "( post on x )", linkedin: "( linkedin post )", none: "( this tab )" }[page.kind];
+  $("preview").hidden = true;
   if (page.kind === "none") {
-    $("title").textContent = "Open a YouTube video, an X post or a LinkedIn post to add it here.";
-    $("go").disabled = true; $("namespace").disabled = true;
+    $("title").textContent = "Open a YouTube video, an X post or a LinkedIn post and it shows up here.";
+    $("title").classList.add("muted");
+    $("addRow").hidden = true;
     return;
   }
-  $("title").textContent = (tab.title || page.url).replace(/ - YouTube$/, "").replace(/ \/ X$/, "");
+  $("title").classList.remove("muted"); $("addRow").hidden = false;
+  $("title").textContent = (tab.title || page.url).replace(/ - YouTube$/, "").replace(/ \/ X$/, "").replace(/ \| LinkedIn$/, "");
   $("go").textContent = page.kind === "youtube" ? "Add video" : "Capture post";
   if (page.kind !== "youtube") {
     const r = await send({ type: "read-post", tabId: tab.id });
     post = r?.ok ? r.post : null;
-    if (post?.text) { $("preview").textContent = post.text.length > 220 ? `${post.text.slice(0, 218)}…` : post.text; if (post.title) $("title").textContent = post.title; }
-    else $("preview").textContent = "Couldn't read the post's text on this page — Marrow needs it for social links. Select the text and try again.";
+    if (post?.text) {
+      $("preview").textContent = post.text.length > 200 ? `${post.text.slice(0, 198)}…` : post.text; $("preview").hidden = false;
+      if (post.title) $("title").textContent = post.title;
+    } else {
+      $("preview").textContent = "Couldn't read the post's text here. Select it on the page and try again."; $("preview").hidden = false;
+    }
   }
 }
 
-async function showCookies() {
-  const state = await getState();
-  const jar = await exportJar();
-  $("profile").textContent = jar.signedIn ? `signed in · ${jar.count} cookies` : `not signed in to YouTube`;
-  $("profile").className = jar.signedIn ? "ok" : "bad";
-  $("last").textContent = state.lastPush ? `${ago(state.lastPush)} · ${state.lastResult}` : "never";
+let health = null;
+/** Read quietly; the user never sees this. */
+async function readHealthQuietly() {
   const r = await send({ type: "health" });
-  if (!r?.ok) { $("youtube").textContent = r?.error || "unreachable"; $("youtube").className = "bad"; return; }
-  health = r.health;
-  $("youtube").textContent = health.youtube ?? "unknown";
-  $("youtube").className = health.youtube === "ok" ? "ok" : health.youtube === "unknown" ? "" : "bad";
-  const k = health.youtube_session;
-  $("keeper").textContent = k ? `${k.status}${k.cookies ? ` · ${k.cookies} cookies` : ""}` : "not running";
-  $("keeper").className = k?.status === "ok" ? "ok" : k ? "bad" : "";
-  $("note").textContent = needsCookies(health) ? "stale — send now" : state.lastError ? `last problem: ${state.lastError}` : "";
+  health = r?.ok ? r.health : null;
 }
 
 $("go").addEventListener("click", async () => {
   const namespace = $("namespace").value;
-  if (!namespace) { $("addNote").textContent = "Pick a namespace (create one in Marrow first)."; return; }
+  if (!namespace) return;
   $("go").disabled = true; $("addNote").textContent = "Adding…";
   try {
-    await chrome.storage.local.set({ lastNamespace: namespace });
+    await saveSettings({ lastNamespace: namespace });
     let res;
     if (page.kind === "youtube") {
-      // a stale server session would fail this ingest: send this profile's cookies first
-      if (health && needsCookies(health)) { $("addNote").textContent = "Sending cookies first…"; await sendCookies(settings); }
+      // a stale server session would fail this ingest: refresh it from this profile first, silently
+      if (health && needsCookies(health) && canSendCookies()) await sendCookies(settings).catch(() => undefined);
       res = await ingestVideo(settings, namespace, page.url);
     } else {
-      if (!post?.text) throw new Error("no post text to capture");
+      if (!post?.text) throw new Error("there's no post text to capture");
       res = await capturePost(settings, { namespace, url: page.url, text: post.text, title: post.title, author: post.author || undefined });
     }
-    const link = settings.webUrl && res.item_id ? ` <a href="${settings.webUrl}/items/${res.item_id}" target="_blank" rel="noreferrer">Open in Marrow</a>` : "";
-    $("addNote").innerHTML = `${res.reused ? "Already in" : "Added to"} <b>${namespace}</b>${res.state ? ` · ${res.state}` : ""}.${link}`;
+    const open = res.item_id ? ` <a href="${settings.webUrl}/items/${res.item_id}" target="_blank" rel="noreferrer">Open in Marrow ↗</a>` : "";
+    $("addNote").innerHTML = `${res.reused ? "Already in" : "Added to"} <b>${namespace}</b>.${open}`;
   } catch (err) {
     $("addNote").textContent = err.message || String(err);
   } finally {
@@ -83,17 +116,46 @@ $("go").addEventListener("click", async () => {
   }
 });
 
-$("send").addEventListener("click", async () => {
-  $("send").disabled = true; $("send").textContent = "Sending…";
-  const r = await send({ type: "send-cookies" });
-  $("send").disabled = false; $("send").textContent = "Send cookies now";
-  $("note").textContent = r?.ok ? `sent ${r.result.cookies} cookies — the server is checking YouTube; the keeper picks the jar up within the hour` : r?.error || "failed";
-  showCookies();
+// ---- settings ----
+const canSendCookies = () => settings.who?.role === "owner" || settings.who?.role === "instance";
+$("gear").addEventListener("click", () => {
+  $("key2").value = settings.apiKey; $("apiUrl").value = settings.apiUrl; $("webUrl").value = settings.webUrl; $("settingsNote").textContent = ""; $("forceNote").textContent = "";
+  $("force").hidden = !canSendCookies();
+  show("settings");
 });
-$("options").addEventListener("click", (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
+$("force").addEventListener("click", async () => {
+  $("force").disabled = true; $("forceNote").textContent = "Sending…";
+  try {
+    const r = await sendCookies(settings);
+    $("forceNote").textContent = `Sent ${r.cookies} cookies.`;
+  } catch (err) {
+    $("forceNote").textContent = err.message;
+  } finally {
+    $("force").disabled = false;
+  }
+});
+$("back").addEventListener("click", () => show("main"));
+$("reset").addEventListener("click", () => { $("apiUrl").value = DEFAULT_API_URL; $("webUrl").value = DEFAULT_WEB_URL; });
+$("save").addEventListener("click", async () => {
+  $("save").disabled = true;
+  try {
+    await saveSettings({ apiUrl: $("apiUrl").value.trim().replace(/\/$/, "") || DEFAULT_API_URL, webUrl: $("webUrl").value.trim().replace(/\/$/, "") || DEFAULT_WEB_URL });
+    settings = await getSettings();
+    if (settings.apiUrl !== DEFAULT_API_URL && !(await tryPermission())) throw new Error("Chrome needs permission to reach that address");
+    if ($("key2").value.trim() !== settings.apiKey) await connect($("key2").value);
+    await main();
+  } catch (err) {
+    $("settingsNote").textContent = err.message;
+  } finally {
+    $("save").disabled = false;
+  }
+});
 
-(async () => {
+async function main() {
   settings = await getSettings();
-  if (!settings.apiUrl || !settings.apiKey) { $("title").textContent = "Set the server address and API key in Options."; $("go").disabled = true; return; }
-  await Promise.all([showTab(), loadNamespaces(), showCookies()]);
-})();
+  if (!settings.apiKey) { show("setup"); return; }
+  whoLine();
+  show("main");
+  await Promise.all([showTab(), loadNamespaces(), readHealthQuietly()]);
+}
+main();

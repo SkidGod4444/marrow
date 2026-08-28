@@ -1,31 +1,45 @@
 // Shared by the popup and the background worker: settings, the Marrow API, the cookie export, what the current tab is.
+import { DEFAULT_API_URL, DEFAULT_WEB_URL } from "./config.js";
 
-export const DEFAULTS = { apiUrl: "", apiKey: "", org: "", webUrl: "", auto: true, lastNamespace: "" };
+export const DEFAULTS = { apiUrl: DEFAULT_API_URL, webUrl: DEFAULT_WEB_URL, apiKey: "", lastNamespace: "", who: null };
 
 export async function getSettings() {
   const s = await chrome.storage.local.get(DEFAULTS);
-  return { ...DEFAULTS, ...s, apiUrl: (s.apiUrl || "").replace(/\/$/, ""), webUrl: (s.webUrl || "").replace(/\/$/, "") };
+  return { ...DEFAULTS, ...s, apiUrl: (s.apiUrl || DEFAULT_API_URL).replace(/\/$/, ""), webUrl: (s.webUrl || DEFAULT_WEB_URL).replace(/\/$/, "") };
 }
+export const saveSettings = (patch) => chrome.storage.local.set(patch);
 export const getState = () => chrome.storage.local.get({ lastPush: null, lastResult: null, lastError: null, lastCheck: null });
 export const setState = (patch) => chrome.storage.local.set(patch);
 
 // ---- the API ----
 export async function api(settings, path, init = {}) {
-  if (!settings.apiUrl || !settings.apiKey) throw new Error("set the server address and API key in Options first");
-  const headers = { "x-api-key": settings.apiKey, ...(settings.org ? { "x-marrow-org": settings.org } : {}), ...init.headers };
-  const res = await fetch(`${settings.apiUrl}${path}`, { ...init, headers, cache: "no-store" });
+  if (!settings.apiKey) throw new Error("paste your API key first");
+  const headers = { "x-api-key": settings.apiKey, ...init.headers };
+  let res;
+  try {
+    res = await fetch(`${settings.apiUrl}${path}`, { ...init, headers, cache: "no-store" });
+  } catch {
+    throw new Error("couldn't reach Marrow — check your connection");
+  }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `the server answered ${res.status}`);
+  if (res.status === 401) throw new Error("that API key isn't valid any more — paste a new one");
+  if (!res.ok) throw new Error(body.error || `Marrow answered ${res.status}`);
   return body;
 }
+/** Who does this key belong to? Also the key check. */
+export const whoAmI = (s) => api(s, "/me");
 export const listNamespaces = (s) => api(s, "/namespaces").then((b) => b.namespaces || []);
 export const ingestVideo = (s, namespace, url) => api(s, "/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ namespace, url }) });
 export const capturePost = (s, body) => api(s, "/capture", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export async function readHealth(settings) {
-  if (!settings.apiUrl) throw new Error("set the server address in Options first");
-  const res = await fetch(`${settings.apiUrl}/health`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`the server answered ${res.status}`);
+  let res;
+  try {
+    res = await fetch(`${settings.apiUrl}/health`, { cache: "no-store" });
+  } catch {
+    throw new Error("couldn't reach Marrow");
+  }
+  if (!res.ok) throw new Error(`Marrow answered ${res.status}`);
   return res.json();
 }
 
@@ -57,9 +71,9 @@ export async function exportJar() {
 
 export async function sendCookies(settings) {
   const jar = await exportJar();
-  if (!jar.signedIn) throw new Error("this browser profile is not signed in to YouTube — sign in here first (with the spare account)");
+  if (!jar.signedIn) throw new Error("this Chrome profile isn't signed in to YouTube — sign in here with the spare account first");
   const body = await api(settings, "/youtube/cookies", { method: "POST", headers: { "content-type": "text/plain" }, body: jar.text });
-  await setState({ lastPush: Date.now(), lastResult: `sent ${body.cookies} cookies`, lastError: null });
+  await setState({ lastPush: Date.now(), lastResult: `${body.cookies} cookies`, lastError: null });
   return body;
 }
 

@@ -246,9 +246,9 @@ The server applies pending Drizzle migrations (`packages/core/src/db/migrations/
 ## Cookies without the scp dance — the Chrome extension
 
 Instead of exporting `cookies.txt` from a private window and copying it to `/secrets`, load `apps/extension` unpacked in a
-**dedicated Chrome profile signed in to the spare YouTube account** (never watch YouTube in that profile). In its Options set
-the API address and an owner's API key. The popup shows `/health.youtube` and `youtube_session`; *Send cookies now* posts
-the profile's jar to `POST /youtube/cookies`, which validates it, writes `YTDLP_COOKIES` atomically and re-probes YouTube.
-With *auto* on, the extension checks `/health` hourly and sends only when the server reports `cookies_stale` / `blocked`
-or the keeper says `signed_out` — a healthy, server-rotated jar is never overwritten. The keeper imports the new jar on its
-next hourly tick. Adding a YouTube video from the popup while the session is stale sends the cookies first.
+**dedicated Chrome profile signed in to the spare YouTube account** (never watch YouTube in that profile). Paste an owner's API
+key (Settings → API keys) into the popup; the addresses are built in. From then on the extension posts the profile's jar to
+`POST /youtube/cookies` — hourly, only when `/health` reports `cookies_stale` / `blocked` or the keeper says `signed_out`,
+and just before adding a YouTube video while stale — without showing users anything (a healthy, server-rotated jar is never
+overwritten). The route validates the jar, writes `YTDLP_COOKIES` atomically and re-probes YouTube; the keeper imports the
+new jar on its next hourly tick. To force one: *Settings → Advanced → Send YouTube session now*.
