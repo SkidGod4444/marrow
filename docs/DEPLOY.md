@@ -141,7 +141,7 @@ curl -s https://marrow.yourdomain.com/api/version    # {"ok":true,"commit":"29c8
 git rev-parse --short origin/main                     # what both should say
 ```
 
-The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passes to the image (`"unknown"` when the image was built by hand without it); `started_at` moves on every restart. Vercel's comes from its system variable `VERCEL_GIT_COMMIT_SHA` — if it reads `null`, turn on *Automatically expose System Environment Variables* (Project → Settings → Environment Variables) and redeploy. If the API lags `origin/main` for more than a couple of minutes, read the timer's log on the box: `journalctl -u marrow-deploy.service -n 50`.
+The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passes to the image (`"unknown"` when the image was built by hand without it); `started_at` moves on every restart. Vercel's comes from its system variable `VERCEL_GIT_COMMIT_SHA` — if it reads `null`, turn on *Automatically expose System Environment Variables* (Project → Settings → Environment Variables) and redeploy. If the API lags `origin/main` for more than a couple of minutes, read the timer's log on the box: `journalctl -u marrow-deploy.service -n 50`. One quirk: the deploy script updates itself, but the copy already running finishes as it was — so a change to `scripts/deploy-ec2.sh` takes effect on the deploy *after* the one that pulled it.
 
 ## Accounts
 
