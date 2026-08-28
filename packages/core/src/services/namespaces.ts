@@ -23,12 +23,38 @@ export async function createNamespace(db: Db, input: { organizationId?: string |
   return row!;
 }
 
-/** Merge flags (e.g. `{ language_learning: true }`); returns null when the namespace doesn't exist (in this workspace). */
-export async function updateNamespaceFlags(db: Db, ref: string, flags: NamespaceFlags, organizationId?: string): Promise<Namespace | null> {
+export type NamespacePatch = { name?: string; description?: string; flags?: NamespaceFlags };
+
+/**
+ * Rename, re-describe and/or merge flags (e.g. `{ language_learning: true }`). Names follow the same rule as creation
+ * and stay unique within the workspace. Returns null when the namespace doesn't exist (in this workspace).
+ */
+export async function updateNamespace(db: Db, ref: string, patch: NamespacePatch, organizationId?: string): Promise<Namespace | null> {
   const ns = await getNamespace(db, ref, organizationId);
   if (!ns) return null;
-  const [row] = await db.update(namespaces).set({ flags: { ...ns.flags, ...flags } }).where(eq(namespaces.id, ns.id)).returning();
+  const set: Partial<typeof namespaces.$inferInsert> = {};
+  if (patch.name !== undefined) {
+    const name = patch.name.trim().toLowerCase();
+    if (!NAME_RE.test(name)) throw new Error(`invalid namespace name "${patch.name}" (use lowercase letters, digits, - or _)`);
+    if (name !== ns.name) {
+      const [dup] = await db
+        .select({ id: namespaces.id })
+        .from(namespaces)
+        .where(and(eq(namespaces.name, name), ns.organizationId ? eq(namespaces.organizationId, ns.organizationId) : isNull(namespaces.organizationId)));
+      if (dup) throw new Error(`a namespace called "${name}" already exists in this workspace`);
+    }
+    set.name = name;
+  }
+  if (patch.description !== undefined) set.description = patch.description;
+  if (patch.flags) set.flags = { ...ns.flags, ...patch.flags };
+  if (Object.keys(set).length === 0) return ns;
+  const [row] = await db.update(namespaces).set(set).where(eq(namespaces.id, ns.id)).returning();
   return row ?? null;
+}
+
+/** Merge flags only — see `updateNamespace`. */
+export async function updateNamespaceFlags(db: Db, ref: string, flags: NamespaceFlags, organizationId?: string): Promise<Namespace | null> {
+  return updateNamespace(db, ref, { flags }, organizationId);
 }
 
 /**

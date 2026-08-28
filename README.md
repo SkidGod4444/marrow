@@ -117,7 +117,7 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 | `GET /sources?namespace=` · `POST /sources {namespace,url,kind?,poll?}` · `DELETE /sources/:id` · `POST /sources/:id/poll` · `POST /namespaces/:ref/poll` | `subscribe`, `list_sources`, `poll_sources` |
 | `GET /items/:id/expressions` · `POST\|DELETE /items/:id/expressions/:n/save` · `GET /items/:id/clips/:n` (audio) | `list_expressions`, `save_expression` |
 | `GET /reviews?now=` · `GET /reviews/summary` · `POST /reviews/:id/answer {result: got_it\|again}` | `review_queue`, `answer_review` |
-| `PATCH /namespaces/:ref {flags}` (e.g. `language_learning`, `auto_ingest_links`, `diarize`) | — |
+| `PATCH /namespaces/:ref {name?, description?, flags?}` (rename; flags e.g. `language_learning`, `auto_ingest_links`, `diarize`) · `DELETE /namespaces/:ref` (removes every item — admins/owners) | — |
 | `POST /namespaces/:ref/summary` · `POST /namespaces/:ref/chat` (AI SDK stream) | — |
 | `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` · `GET /items/:id/audio` (podcast playback) | — (web app) |
 

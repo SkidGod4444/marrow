@@ -123,6 +123,32 @@ describe("accounts, workspaces, roles (Better Auth)", () => {
     expect(inst.namespaces.map((n: { name: string }) => n.name)).toEqual(["robotics"]);
   });
 
+  it("namespaces can be renamed and deleted by admins/owners only; names stay unique per workspace", async () => {
+    const ada = await signUp("ada@example.com", "Ada");
+    const bob = await signUp("bob@example.com", "Bob");
+    const org = (await body(await json("/me", { cookie: ada }))).active.id as string;
+    const bobId = (await body(await json("/me", { cookie: bob }))).user.id as string;
+    await auth.api.addMember({ body: { organizationId: org, userId: bobId, role: "member" } });
+    const asBob = { cookie: bob, headers: { "x-marrow-org": org } };
+    const robotics = (await body(await json("/namespaces", { method: "POST", cookie: ada, body: JSON.stringify({ name: "robotics" }) }))).namespace;
+    await json("/namespaces", { method: "POST", cookie: ada, body: JSON.stringify({ name: "control" }) });
+    // member: neither
+    expect((await json(`/namespaces/${robotics.id}`, { method: "PATCH", ...asBob, body: JSON.stringify({ name: "robots" }) })).status).toBe(403);
+    expect((await json(`/namespaces/${robotics.id}`, { method: "DELETE", ...asBob })).status).toBe(403);
+    // owner: rename, but not onto an existing name or an invalid one
+    const taken = await json(`/namespaces/${robotics.id}`, { method: "PATCH", cookie: ada, body: JSON.stringify({ name: "control" }) });
+    expect([taken.status, (await body(taken)).error]).toEqual([400, expect.stringMatching(/already exists/)]);
+    const bad = await json(`/namespaces/${robotics.id}`, { method: "PATCH", cookie: ada, body: JSON.stringify({ name: "Robots & co" }) });
+    expect(bad.status).toBe(400);
+    const ok = await json(`/namespaces/${robotics.id}`, { method: "PATCH", cookie: ada, body: JSON.stringify({ name: "Robots" }) });
+    expect((await body(ok)).namespace.name).toBe("robots");
+    expect((await body(await json("/namespaces", { cookie: ada }))).namespaces.map((n: { name: string }) => n.name).sort()).toEqual(["control", "robots"]);
+    // flags still merge through the same route; delete removes it
+    expect((await body(await json(`/namespaces/robots`, { method: "PATCH", cookie: ada, body: JSON.stringify({ flags: { language_learning: true } }) }))).namespace.flags).toMatchObject({ language_learning: true });
+    expect((await json(`/namespaces/robots`, { method: "DELETE", cookie: ada })).status).toBe(200);
+    expect((await body(await json("/namespaces", { cookie: ada }))).namespaces.map((n: { name: string }) => n.name)).toEqual(["control"]);
+  });
+
   it("an account from before workspaces existed gets one at sign-in, and it adopts the old library", async () => {
     await signUp("ada@example.com", "Ada");
     // Simulate the upgrade: the account exists, no workspace does, and the library predates workspaces.

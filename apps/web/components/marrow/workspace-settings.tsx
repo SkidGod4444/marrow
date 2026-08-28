@@ -1,14 +1,16 @@
 "use client";
 
-import { Copy, KeyRound, Link2, Trash2, UserPlus } from "lucide-react";
+import { Copy, KeyRound, Link2, Pencil, Trash2, UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Me } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { useApiKeysQuery, useWorkspaceMutation, useWorkspaceQuery } from "@/lib/queries";
+import { type NamespaceRow, useApiKeysQuery, useDeleteNamespace, useNamespacesQuery, useRenameNamespace, useWorkspaceMutation, useWorkspaceQuery } from "@/lib/queries";
 import { fmtDay } from "@/lib/time";
 
 // The client plugin only knows the default roles; the server validates against the full matrix.
@@ -22,9 +24,10 @@ const ROLE_HELP: Record<string, string> = {
   owner: "Everything, including deleting the workspace and changing owners.",
 };
 
-/** Members, invitations (links you copy — Marrow sends no e-mail), and personal API keys for this workspace. */
+/** Members, invitations (links you copy — Marrow sends no e-mail), namespaces, and personal API keys for this workspace. */
 export function WorkspaceSettings({ me }: { me: Me }) {
   const org = me.active!;
+  const router = useRouter();
   const canManage = me.permissions.includes("member:update") || me.permissions.includes("invitation:create") || org.role === "owner" || org.role === "admin";
   const workspace = useWorkspaceQuery(org.id);
   const apiKeys = useApiKeysQuery(org.id);
@@ -44,6 +47,31 @@ export function WorkspaceSettings({ me }: { me: Me }) {
   const revokeKey = useWorkspaceMutation(org.id, ({ id }: { id: string }) => authClient.apiKey.delete({ keyId: id }), "Key revoked");
   const busy = changeRole.isPending || remove.isPending || invite.isPending || cancel.isPending || createKey.isPending || revokeKey.isPending;
   const inviteLink = (id: string) => `${window.location.origin}/invite/${id}`;
+
+  // Namespaces: rename (namespace:update) and delete (namespace:delete) — admins and owners.
+  const canRename = me.permissions.includes("namespace:update");
+  const canDelete = me.permissions.includes("namespace:delete");
+  const nsQuery = useNamespacesQuery();
+  const nsList = nsQuery.data ?? [];
+  const rename = useRenameNamespace();
+  const deleteNs = useDeleteNamespace();
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [deleting, setDeleting] = useState<NamespaceRow | null>(null);
+  const busyNs = rename.isPending || deleteNs.isPending;
+  const submitRename = (n: NamespaceRow) => {
+    const name = newName.trim().toLowerCase();
+    if (!name || name === n.name) return setRenaming(null);
+    rename.mutate(
+      { id: n.id, name },
+      {
+        onSuccess: () => {
+          setRenaming(null);
+          router.refresh();
+        },
+      },
+    );
+  };
   const copy = async (text: string, what: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -160,6 +188,101 @@ export function WorkspaceSettings({ me }: { me: Me }) {
           )}
         </section>
       )}
+
+      <section className="space-y-3" aria-labelledby="namespaces">
+        <h2 id="namespaces" className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          Namespaces · {nsList.length}
+        </h2>
+        <ul className="divide-y divide-border/70 border-y border-border/70">
+          {nsList.map((n) => (
+            <li key={n.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+              {renaming === n.id ? (
+                <form
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitRename(n);
+                  }}
+                >
+                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus aria-label={`New name for ${n.name}`} className="w-56 font-mono text-[13px]" pattern="[a-z0-9][a-z0-9_\-]{0,63}" title="Lowercase letters, digits, - or _" />
+                  <Button type="submit" size="xs" disabled={busyNs || !newName.trim() || newName.trim().toLowerCase() === n.name}>
+                    Save
+                  </Button>
+                  <Button type="button" size="xs" variant="ghost" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[14px]">
+                    {n.name}
+                    {n.flags?.language_learning && <span className="ml-2 rounded-md border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground">language</span>}
+                  </p>
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    {n.itemCount} item{n.itemCount === 1 ? "" : "s"} · {n.readyCount} ready
+                  </p>
+                </div>
+              )}
+              {canRename && renaming !== n.id && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={busyNs}
+                  onClick={() => {
+                    setRenaming(n.id);
+                    setNewName(n.name);
+                  }}
+                >
+                  <Pencil />
+                  Rename
+                </Button>
+              )}
+              {canDelete && (
+                <Button variant="ghost" size="icon-sm" aria-label={`Delete ${n.name}`} disabled={busyNs} onClick={() => setDeleting(n)}>
+                  <Trash2 />
+                </Button>
+              )}
+            </li>
+          ))}
+          {nsList.length === 0 && <li className="py-2 text-sm text-muted-foreground">{nsQuery.isPending ? "Loading…" : "No namespaces yet — add something in the library and one is created with it."}</li>}
+        </ul>
+        {(canRename || canDelete) && <p className="text-[12px] text-muted-foreground">Renaming changes the namespace&apos;s links. Deleting removes every item in it — transcripts, articles, clips — for everyone in the workspace.</p>}
+        <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="reading">Delete {deleting?.name}?</DialogTitle>
+              <DialogDescription>
+                This removes the namespace and its {deleting?.itemCount ?? 0} item{deleting?.itemCount === 1 ? "" : "s"} — transcripts, articles, clips, everything — for everyone in {org.name}. There is no undo.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setDeleting(null)}>
+                Keep it
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={busyNs}
+                onClick={() =>
+                  deleting &&
+                  deleteNs.mutate(
+                    { id: deleting.id, name: deleting.name },
+                    {
+                      onSuccess: () => {
+                        setDeleting(null);
+                        router.refresh();
+                      },
+                    },
+                  )
+                }
+              >
+                {deleteNs.isPending ? "Deleting…" : `Delete ${deleting?.name ?? ""}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
 
       <section className="space-y-3" aria-labelledby="api-keys" id="api-keys">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">API keys for this workspace</h2>

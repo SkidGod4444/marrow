@@ -63,6 +63,35 @@ export function useIngestMutation() {
   });
 }
 
+// ---- Namespaces (settings: rename / delete; admins and owners) ----
+export type NamespaceRow = { id: string; name: string; description: string; flags: Record<string, boolean | undefined>; itemCount: number; readyCount: number };
+export function useNamespacesQuery() {
+  return useQuery({ queryKey: keys.namespaces, queryFn: () => proxy<{ namespaces: NamespaceRow[] }>("namespaces").then((r) => r.namespaces) });
+}
+export function useRenameNamespace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; name: string }) => proxy<{ namespace: NamespaceRow }>(`namespaces/${v.id}`, { method: "PATCH", body: JSON.stringify({ name: v.name }) }),
+    onSuccess: (r) => {
+      toast.success(`Renamed to ${r.namespace.name}`, { description: "Links to the old name no longer work." });
+      void qc.invalidateQueries({ queryKey: keys.namespaces });
+    },
+    onError: (err) => toast.error("Couldn't rename", { description: err.message }),
+  });
+}
+export function useDeleteNamespace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; name: string }) => proxy<{ ok: true }>(`namespaces/${v.id}`, { method: "DELETE" }),
+    onSuccess: (_r, v) => {
+      toast.success(`Deleted ${v.name}`);
+      void qc.invalidateQueries({ queryKey: keys.namespaces });
+      void qc.invalidateQueries({ queryKey: keys.reviewsSummary });
+    },
+    onError: (err) => toast.error("Couldn't delete", { description: err.message }),
+  });
+}
+
 // ---- Workspace settings (Better Auth client is the transport; the cache is ours) ----
 export type Member = { id: string; role: string; userId: string; user: { email: string; name: string } };
 export type Invitation = { id: string; email: string; role: string | null; status: string; expiresAt: string | Date };

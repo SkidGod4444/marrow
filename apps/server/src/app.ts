@@ -6,7 +6,7 @@ import {
   addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown,
   getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent,
   lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES,
-  streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespaceFlags,
+  streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace,
 } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
@@ -117,9 +117,14 @@ export function createApp(deps: AppDeps) {
   app.patch("/namespaces/:ref", async (c) => {
     const p = c.get("principal");
     if (!can(p, "namespace", "update")) return deny(c);
-    const body = await c.req.json<{ flags?: Record<string, boolean> }>().catch(() => ({}) as { flags?: Record<string, boolean> });
-    const row = await updateNamespaceFlags(deps.db, c.req.param("ref"), body.flags ?? {}, org(c));
-    return row ? c.json({ namespace: row }) : c.json({ error: "namespace not found" }, 404);
+    type Patch = { name?: string; description?: string; flags?: Record<string, boolean> };
+    const body = await c.req.json<Patch>().catch(() => ({}) as Patch);
+    try {
+      const row = await updateNamespace(deps.db, c.req.param("ref"), { name: body.name, description: body.description, flags: body.flags }, org(c));
+      return row ? c.json({ namespace: row }) : c.json({ error: "namespace not found" }, 404);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   app.delete("/namespaces/:ref", async (c) => {

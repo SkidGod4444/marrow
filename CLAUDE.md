@@ -62,7 +62,7 @@ packages/core/src/
   services/chat.ts     per-video chat: static cached system prefix, view_frame/fetch_url/web_search tools, streamText → UI-message stream
 apps/server/src/       app.ts (Hono REST routes + /mcp mount + POST /items/:id/chat), mcp.ts (MCP tool registrations), deps.ts (ServerDeps),
                        index.ts (boot: db + storage + queue + Bun.serve), mcp-stdio.ts (stdio transport entrypoint), cli.ts
-apps/web/              Next.js (App Router): app/(app)/* = everything behind sign-in (settings = members/invitations/API keys, invite/[id]) (page.tsx = inbox, library, items/[id] (?t=&tab=), namespaces/[name]/{chat,graph}, graph, review),
+apps/web/              Next.js (App Router): app/(app)/* = everything behind sign-in (settings = members/invitations/namespaces rename+delete/API keys, invite/[id]) (page.tsx = inbox, library, items/[id] (?t=&tab=), namespaces/[name]/{chat,graph}, graph, review),
                        app/login, app/signup, app/api/auth/[...all] (Better Auth proxy), proxy.ts (gate),
                        app/api/marrow/[...path] (key-injecting proxy),
                        app/namespaces/[name]/graph (knowledge graph), lib/api.ts (server-only API client), lib/time.ts (client timestamp helpers),
