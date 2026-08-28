@@ -2,8 +2,8 @@
 # owns the YouTube session on the server and rewrites yt-dlp's cookie jar every hour. See apps/keeper/src/index.ts.
 FROM mcr.microsoft.com/playwright:v1.62.1-noble
 
-RUN curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1
-ENV PATH=/root/.bun/bin:$PATH
+# bun via npm (the image has Node; the bun install script needs unzip, which it lacks)
+RUN npm install -g bun@1 >/dev/null 2>&1 && bun --version
 
 WORKDIR /app/apps/keeper
 COPY apps/keeper/package.json ./

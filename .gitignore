@@ -18,3 +18,6 @@ apps/web/playwright-report/
 apps/web/e2e/.auth/
 # operator-supplied files mounted into the server container (cookies, certificates)
 secrets/
+# deploy markers written by scripts/deploy-ec2.sh on the box
+.deployed
+.deploy-failed
