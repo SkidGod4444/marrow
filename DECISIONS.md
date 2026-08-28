@@ -234,3 +234,7 @@ With storage fixed the first real ingest failed at fetch: `yt-dlp … Sign in to
 ## 2026-08-28 — yt-dlp needs a JS runtime for YouTube streams
 
 Even with cookies the box got "Requested format is not available": yt-dlp's verbose log said *n challenge solving failed — ensure a supported JavaScript runtime and challenge solver script*. Since 2025.10 yt-dlp decodes YouTube's stream signatures with a bundled JS solver that needs Deno (preferred), Bun or Node — only Deno is enabled by default, and a bare Debian image has none. Fixed twice over: the Docker image installs Deno, and `ytdlpArgs` always passes `--js-runtimes bun:<process.execPath>` (Bun runs Marrow, so it is always there — dev machines included). Proven on the box: with cookies + runtime a stream URL resolves and serves (HTTP 206). (PRD §5 fetch)
+
+## 2026-08-28 — Instance size: `t4g.small` is the baseline
+
+Owner asked to upgrade the box from `t4g.micro` to `t4g.small`. Measured why: 1 GB with no swap was OOM-killed by the deploy's own image build, and the first real ingest (11 min of video) pushed ~260 MB into the 2 GB swap even after the fix. The launch guide now says `t4g.small` (the earlier "t4g.medium" was over-specified; the owner reasonably picked micro), step 5 adds the swap on every new box, and the resize is written as a console walkthrough with the Elastic-IP check first — the instance's role stays S3-only, so the box can't resize itself, and shouldn't. (docs/DEPLOY.md §3, §5, "The box")

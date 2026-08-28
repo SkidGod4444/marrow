@@ -35,7 +35,7 @@ The `vector` extension is preinstalled on RDS PostgreSQL ≥ 15; the app runs `C
 
 ## 3. EC2 instance (15 min)
 
-1. **EC2** → *Launch instance*: name `marrow`, AMI **Ubuntu Server 24.04 LTS (arm64)**, instance type **t4g.medium** (2 vCPU / 4 GB — ffmpeg needs it). Key pair: *Create new* `marrow-key` (.pem) — download and keep it.
+1. **EC2** → *Launch instance*: name `marrow`, AMI **Ubuntu Server 24.04 LTS (arm64)**, instance type **t4g.small** (2 vCPU / 2 GB, ~$12/month before credits — with the swap added in step 5 it runs the server, `yt-dlp`, `ffmpeg` and two ingests at once; a `t4g.micro` with 1 GB gets OOM-killed during image builds, and a `t4g.medium` is only worth it for three or more concurrent ingests). Key pair: *Create new* `marrow-key` (.pem) — download and keep it.
 2. Network settings: *Create security group* `marrow-web-sg`: allow **SSH (22) from My IP**, **HTTP (80) from Anywhere**, **HTTPS (443) from Anywhere**.
 3. Storage: **30 GB gp3**. Launch.
 4. **EC2 → Elastic IPs** → *Allocate* → *Associate* with the `marrow` instance. Note the IP.
@@ -57,8 +57,11 @@ Caddy inside the compose stack obtains the HTTPS certificate automatically once 
 ssh -i marrow-key.pem ubuntu@<ELASTIC_IP>
 # Docker
 curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker ubuntu && newgrp docker
+# 2 GB swap — turns a memory spike (image build, ffmpeg) into "slower" instead of "killed"
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab && sudo sysctl -w vm.swappiness=10
 # Code
-sudo apt-get install -y git && git clone https://github.com/<you>/marrow.git && cd marrow
+sudo apt-get install -y git unzip && git clone https://github.com/<you>/marrow.git && cd marrow
 cp .env.example .env && nano .env
 ```
 
@@ -168,15 +171,17 @@ Alternatives: `YTDLP_PROXY=http://user:pass@host:port` routes yt-dlp through a r
 
 ### The box: memory, swap, and how many jobs at once
 
-A `t4g.micro` (1 GB, no swap) runs the server fine but not comfortably: `docker compose … --build` alone has OOM-killed the running server during a deploy, and an ingest runs `yt-dlp` + `ffmpeg` on top of the server. Two things help:
+The server idles at ~150 MB, but an ingest adds `yt-dlp` + `ffmpeg` (and yt-dlp's JS challenge solver runs Deno), and a deploy builds the image on the same box. Measured on the first real ingest: a 1 GB `t4g.micro` (no swap) was OOM-killed during a build, and even with the 2 GB swap from step 5 an 11-minute video pushed ~260 MB into swap. **`t4g.small` (2 GB) is the baseline**; keep the swap anyway.
 
-```bash
-# 2 GB swap (once; survives reboots) — turns "killed" into "slower" when memory spikes
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
-echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab; sudo sysctl -w vm.swappiness=10
-```
+**Resizing a running box (about three minutes of downtime):**
 
-and, if you ingest more than the odd video, resize to a **`t4g.small` (2 GB)** — same ARM family, stop → *Instance type* → start, five minutes, ~$12/month before credits. `INGEST_CONCURRENCY` in `.env` sets how many jobs run at once (default 1; 2 is fine on 1 GB with swap, 3 on 2 GB); `STT_CONCURRENCY` (default 3) is how many audio chunks go to the transcription API in parallel.
+1. First make sure the address survives: **EC2 → Elastic IPs** must list the instance's public IP. If it doesn't, *Allocate* one and *Associate* it now — a stop/start without an Elastic IP changes the public IP, and `MARROW_API_DOMAIN` (e.g. `3-7-96-159.sslip.io`), Vercel's `MARROW_API_URL` and any DNS record would all point at the old one.
+2. **EC2 → Instances → the instance → Instance state → Stop** (not *Terminate*). Wait for *Stopped*.
+3. **Actions → Instance settings → Change instance type → `t4g.small`** → Apply.
+4. **Instance state → Start.** Docker and the Marrow stack come back on their own (`restart: unless-stopped`); the deploy timer keeps running.
+5. `curl https://api…/health` → `"ok":true` with the same `commit`; `ssh … free -m` shows ~1.9 GB.
+
+Then, in `.env` on the box: `INGEST_CONCURRENCY=2` (3 on a `t4g.medium`) — how many jobs run at once; `STT_CONCURRENCY` (default 3) is how many audio chunks go to the transcription API in parallel. The instance's IAM role is S3-only on purpose — resizing is a console action, not something the box can do to itself. (`aws` CLI is installed on the box for diagnostics; with that role it can only talk to S3.)
 
 Looking at the tables without installing anything: `docker run --rm --network host -e PGSSLMODE=require postgres:16-alpine psql "$DATABASE_URL" -c "select state, count(*) from jobs group by 1"` (the broker's own view is `pgboss.job`, its error text in `output`).
 
