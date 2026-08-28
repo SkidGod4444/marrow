@@ -1,6 +1,6 @@
 # Marrow
 
-Video-first research knowledge platform. Marrow ingests long-form video (YouTube first; podcasts, uploads, captured posts, newsletters later) into structured, timestamped, searchable knowledge — word-timestamped transcript, captioned keyframes, a readable article, resolved references — organised into topic-scoped **namespaces**, and exposes it to a research chat agent, a reader, and external agents (Claude Code) through an MCP server + REST API.
+Video-first research knowledge platform. Marrow ingests long-form video and audio (YouTube, podcast feeds) and captured text (articles, papers, pasted posts, newsletters) into structured, timestamped, searchable knowledge — word-timestamped transcript, captioned keyframes, a readable article, resolved references — organised into topic-scoped **namespaces**, and exposes it to a research chat agent, a reader, and external agents (Claude Code) through an MCP server + REST API.
 
 The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every decision the PRD doesn't make is in `DECISIONS.md`.
 
@@ -10,7 +10,10 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 - **Phase 2 — MCP + REST** ✅ every PRD §8 tool over MCP (stdio + Streamable HTTP) and REST, hybrid search with RRF.
 - **Phase 3 — Web app** ✅ library → item page with Reader / Chat / Transcript, YouTube player that seeks on `[MM:SS]` citations, per-video chat (AI Elements + Vercel AI SDK) with `view_frame` / `web_search` / `fetch_url`, "What's on screen now", and a **knowledge graph** per namespace (`/namespaces/<name>/graph`, also `get_graph` over MCP/REST).
 - **Phase 4 — Namespaces at scale** ✅ playlist/channel subscriptions polled on a schedule, the watch inbox as the landing page (Read / Chat / Skip), novelty triage from the 6th item, namespace summaries every 3 ingests, namespace-level chat with the retrieval tools.
-- Phases 5–6 (capture + text sources, language mode) follow.
+- **Phase 5 — Capture + text sources** ✅ `POST /capture` (URL → readable text or PDF, or pasted text; social posts need the text), iOS/Android share sheet + bookmarklet (`docs/CAPTURE.md`), inbound-email webhook, RSS/podcast feeds through the same subscriptions, linked-video offers, Obsidian-ready markdown with front-matter.
+- **Phase 6 — Language mode + review queue** ✅ namespaces flagged `language_learning` mine idioms, phrasal verbs and slang from podcasts/videos with playable exact-span clips (word-timestamp aligned), a Language tab, and `/review` recall prompts on a 2 d / 7 d / 30 d schedule.
+
+All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
 
 ## Quick start (local, no Docker)
 
@@ -79,7 +82,7 @@ or in a project's `.mcp.json`:
 claude mcp add marrow -- bun run /ABSOLUTE/PATH/marrow/apps/server/src/mcp-stdio.ts
 ```
 
-Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns the JPEG), `lookup_entity`, `list_items`, `ingest`, `job_status`, `export_markdown`. Every search hit carries `t_start` and a `deep_link` (`…&t=1423s`) — cite as `title @ MM:SS`.
+Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_frame` (returns the JPEG), `lookup_entity`, `get_graph`, `list_items`, `ingest`, `capture`, `job_status`, `export_markdown`, `subscribe`, `list_sources`, `poll_sources`, `inbox`, `list_expressions`, `save_expression`, `review_queue`, `answer_review`. Every search hit carries `t_start` and a `deep_link` (`…&t=1423s`) — cite as `title @ MM:SS`; text items (posts, papers, newsletters) have no timestamps and are cited by title.
 
 ### REST mirror
 
@@ -93,13 +96,17 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 | `GET /entities?namespace=&name=` · `GET /namespaces/:ref/entities` | `lookup_entity` |
 | `GET /items?namespace=&status=` · `GET /items/:id` | `list_items` |
 | `POST /ingest {namespace,url,force?}` | `ingest` |
+| `POST /capture {namespace,url?,text?,title?,author?,note?,source_type?}` · `POST /inbound/email/:token` (Postmark / CloudMailin / generic JSON) | `capture` |
 | `GET /jobs/:id` | `job_status` |
 | `GET /items/:id/export.md?transcript=1` · `GET /namespaces/:ref/export.md` | `export_markdown` |
 | `GET /namespaces/:ref/graph?max_entities=150` | `get_graph` |
 | `GET /inbox?namespace=&archived=1` · `POST /items/:id/archive {archived?}` | `inbox` |
 | `GET /sources?namespace=` · `POST /sources {namespace,url,kind?,poll?}` · `DELETE /sources/:id` · `POST /sources/:id/poll` · `POST /namespaces/:ref/poll` | `subscribe`, `list_sources`, `poll_sources` |
+| `GET /items/:id/expressions` · `POST\|DELETE /items/:id/expressions/:n/save` · `GET /items/:id/clips/:n` (audio) | `list_expressions`, `save_expression` |
+| `GET /reviews?now=` · `GET /reviews/summary` · `POST /reviews/:id/answer {result: got_it\|again}` | `review_queue`, `answer_review` |
+| `PATCH /namespaces/:ref {flags}` (e.g. `language_learning`, `auto_ingest_links`, `diarize`) | — |
 | `POST /namespaces/:ref/summary` · `POST /namespaces/:ref/chat` (AI SDK stream) | — |
-| `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` | — (web app) |
+| `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` · `GET /items/:id/audio` (podcast playback) | — (web app) |
 
 All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) when `MARROW_API_KEY` is set.
 
@@ -123,11 +130,14 @@ Tests run on an in-memory PGlite with fake providers — no network, no ffmpeg. 
 ## Layout
 
 ```
-packages/core/   schema (Drizzle), video document types, storage (S3/local), OpenAI clients, pipeline, services
-apps/server/     one process: Hono REST API (+ MCP in Phase 2) + pg-boss job runner + CLI
-apps/web/        Next.js app: library, item page (player + reader + chat + transcript), proxy route to the server
-docker/          server image (bun + ffmpeg + yt-dlp)
-docs/            PRD.mdx (normative), STACK.md (resolved tech choices)
+packages/core/   schema (Drizzle + migrations), video document types, storage (S3/local), OpenAI clients,
+                 capture (page/PDF/feed parsing), pipeline (10 checkpointed stages), services (one function per API tool)
+apps/server/     one process: Hono REST API + MCP (HTTP + stdio) + pg-boss job runner + CLI; MARROW_FAKE mode with a seeded corpus
+apps/web/        Next.js app: inbox (landing), library, item page (player/audio + reader + chat + transcript + language),
+                 shared read page, namespace chat + knowledge graph, /review; e2e/ Playwright suite; proxy route to the server
+docker/          server image (bun + ffmpeg + yt-dlp + RDS CA), Caddy, systemd deploy timer
+docs/            PRD.mdx (normative), STACK.md (resolved tech choices), DEPLOY.md (AWS + Vercel), CAPTURE.md (share sheet, email, feeds)
+scripts/         seed-demo.ts, e2e-stack.sh, deploy-ec2.sh
 ```
 
 ## Cost

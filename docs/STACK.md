@@ -23,7 +23,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 
 | Concern | Decision |
 |---|---|
-| Language / runtime | **TypeScript (latest, strict) on bun** — **Turborepo** over bun workspaces: `packages/core` (schema, document types, storage, OpenAI clients, pipeline, services), `apps/server` (**one process**: Hono REST + MCP HTTP + in-process pg-boss job runner + CLI + MCP stdio entrypoint), `apps/web` (Phase 3: latest Next.js). |
+| Language / runtime | **TypeScript (latest, strict) on bun** — **Turborepo** over bun workspaces: `packages/core` (schema, document types, storage, OpenAI clients, pipeline, services), `apps/server` (**one process**: Hono REST + MCP HTTP + in-process pg-boss job runner + CLI + MCP stdio entrypoint), `apps/web` (latest Next.js). |
 | Web framework | **Next.js 16.3 (App Router, Turbopack, standalone output)** + React 19 + Tailwind v4 + **shadcn/ui (`base-nova` style, @base-ui/react)** + **AI Elements** (vendored into `components/ai-elements/`) + Vercel AI SDK `useChat` + **d3-force/d3-zoom** for the knowledge graph. Fonts via `next/font/google`: Source Serif 4, IBM Plex Sans, IBM Plex Mono. The web app is a pure API client (no DB/OpenAI access); a proxy route injects the API key. |
 | Database | **Amazon RDS for PostgreSQL** (`db.t4g.micro`, single-AZ, automated snapshots) with `pgvector` + `tsvector`, accessed via **Drizzle ORM** + `postgres` driver. **Local dev**: `pgvector/pgvector` container in docker-compose. **Tests / no-Docker dev**: PGlite (Postgres-in-WASM with the vector extension) when `DATABASE_URL` is unset — same SQL, same migrations. |
 | Object storage | **Amazon S3** (one bucket, Standard class, versioning on, lifecycle: abort incomplete multipart after 7 days) via `@aws-sdk/client-s3`. **Local dev**: MinIO in docker-compose (same S3 API, `S3_ENDPOINT`). **Tests**: local filesystem driver. Keys follow PRD §12 exactly; raw video is deleted after the pipeline finishes (only audio, frames, clips, documents are kept). |
@@ -33,6 +33,8 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | Reranker | **RRF score fusion** by default; optional Luna rerank behind a flag. |
 | MCP SDK | `@modelcontextprotocol/sdk` (stdio + `InMemoryTransport` for tests) with **`@hono/mcp`** `StreamableHTTPTransport` mounted at `/mcp` on the same Hono app, stateless mode. |
 | OpenAI client | Official `openai` SDK in the pipeline (transcription needs `verbose_json` word output). Vercel AI SDK only in the web app for streaming chat. |
+| Language mode (PRD §6.3) | Expressions via `gpt-5.6-luna` (structured output, line timestamps) → exact spans from whisper word timestamps → **ffmpeg AAC clips** (`clips/{item}/{n}.m4a`, ±0.15 s); review queue in Postgres (`expression_reviews`, 2 d / 7 d / 30 d). No extra services. |
+| End-to-end tests | **Playwright** (Chromium; a Pixel-7 project for phones) + **axe-core** (WCAG 2.x A/AA incl. colour contrast) against the app in `MARROW_FAKE=1` mode — no network in CI. |
 | Capture / feeds | `@mozilla/readability` + `linkedom` (article extraction), `turndown` (HTML → markdown), `unpdf` (PDF text), `fast-xml-parser` (RSS/Atom) — all pure JS, no headless browser. |
 | Tests / lint | **Vitest** (PGlite in-memory per test file, fake providers); ESLint; `tsc --noEmit`. Live tests gated behind `LIVE=1`. |
 

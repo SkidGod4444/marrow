@@ -129,6 +129,10 @@ FORCE=1 ./scripts/deploy-ec2.sh                  # rebuild even when nothing cha
 
 Only server-side changes matter to the box; a web-only commit rebuilds in a minute or two and restarts the same code. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR on GitHub.
 
+## Database migrations
+
+The server applies pending Drizzle migrations (`packages/core/src/db/migrations/`) at boot, before it starts serving — a deploy that adds a table (e.g. `0003_expression_reviews`, `0004_review_context`) needs nothing from you. If a boot ever fails on a migration, the log names it; the previous container keeps running until the new one is healthy (`scripts/deploy-ec2.sh` waits for `/health`).
+
 ## Things that bite first-time AWS users
 
 - **Only the Elastic IP is stable** — if you stop/start the instance without an EIP, the public IP changes.
