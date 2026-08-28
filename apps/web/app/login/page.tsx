@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 import { SITE_DESCRIPTION } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: { absolute: "Marrow — talks, lectures and podcasts, turned into searchable knowledge" },
+  title: "Sign in",
   description: SITE_DESCRIPTION,
   robots: { index: true, follow: true },
   alternates: { canonical: "/login" },

@@ -11,6 +11,7 @@ services:
     environment:
       STORAGE_DRIVER: s3
       WORK_DIR: /data/work
+      YTDLP_POT_PROVIDER_URL: http://pot-provider:4416 # PO tokens for YouTube (see the service below)
     volumes:
       - workdata:/data
       - ./secrets:/secrets # writable: yt-dlp refreshes youtube-cookies.txt as YouTube rotates it (docs/DEPLOY.md)
@@ -19,6 +20,14 @@ services:
     # in-flight jobs); anything still unfinished is re-queued when the new container boots.
     stop_grace_period: 100s
     expose: ["3001"]
+    depends_on: [pot-provider]
+
+  # Proof-of-origin tokens for YouTube (bgutil): with cookies alone, cloud addresses still trip the "not a bot" check now and
+  # then; tokened requests look legitimate. Small Node service, only reachable from the server container.
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+    expose: ["4416"]
 
   caddy:
     image: caddy:2

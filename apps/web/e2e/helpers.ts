@@ -65,6 +65,8 @@ export async function readyItem(pred: (i: ItemRow) => boolean, namespace = "demo
 
 /** The page body must never scroll sideways (owner rule: responsive everywhere). */
 export async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "horizontal overflow (px)").toBeLessThanOrEqual(1);
+  // Polled: right after a viewport change the layout takes a frame or two to settle.
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), { message: "horizontal overflow (px)", timeout: 3000 })
+    .toBeLessThanOrEqual(1);
 }

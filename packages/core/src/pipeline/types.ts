@@ -14,8 +14,8 @@ import type { PageContent } from "../capture/page.ts";
 
 /** Everything a stage touches that costs money or shells out — swapped for fakes in tests. */
 export interface Providers {
-  fetchMetadata(url: string): Promise<YtMeta>;
-  download(url: string, outDir: string): Promise<string>;
+  fetchMetadata(url: string, log?: (m: string) => void): Promise<YtMeta>;
+  download(url: string, outDir: string, log?: (m: string) => void): Promise<string>;
   probe(path: string): Promise<ProbeInfo>;
   extractAudio(src: string, out: string): Promise<void>;
   detectSilences(path: string): Promise<Silence[]>;

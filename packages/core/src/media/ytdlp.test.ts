@@ -14,7 +14,7 @@ describe("canonicalizeSourceUrl", () => {
   });
 });
 
-import { explainYtdlpError, ytdlpArgs } from "./ytdlp.ts";
+import { explainYtdlpError, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
 
 describe("yt-dlp on a flagged host", () => {
   it("passes cookies, proxy and extra args through to every call", () => {
@@ -24,11 +24,41 @@ describe("yt-dlp on a flagged host", () => {
     ]);
     // the JS runtime yt-dlp needs for YouTube's challenge solver: Bun itself, by default
     expect(ytdlpArgs({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined }, "/usr/local/bin/bun")).toEqual(["--js-runtimes", "bun:/usr/local/bin/bun"]);
+    // a PO-token provider is pointed at through the bgutil plugin's extractor arg
+    expect(ytdlpArgs({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: "http://pot-provider:4416/" }, null)).toEqual(["--extractor-args", "youtubepot-bgutilhttp:base_url=http://pot-provider:4416"]);
   });
   it("turns the bot check and other known refusals into sentences, and leaves the rest alone", () => {
     expect(explainYtdlpError("yt-dlp -J … exited 1: ERROR: [youtube] LaULblUJfxA: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication.")).toMatch(/cookies file or a proxy/);
     expect(explainYtdlpError("ERROR: [youtube] x: Private video. Sign in if you've been granted access")).toMatch(/private, removed/);
     expect(explainYtdlpError("ERROR: HTTP Error 429: Too Many Requests")).toMatch(/rate-limiting/);
     expect(explainYtdlpError("ffmpeg exited 1: something odd")).toBe("ffmpeg exited 1: something odd");
+    // with cookies configured the advice is different: it is the intermittent check, not a missing file
+    expect(explainYtdlpError("ERROR: [youtube] x: Sign in to confirm you’re not a bot.", { hasCookies: true })).toMatch(/rejected this server's session just now/);
+  });
+
+  it("retries the intermittent bot check a couple of times, other errors not at all", async () => {
+    let n = 0;
+    const flaky = async () => {
+      n++;
+      if (n < 3) throw new Error("ERROR: [youtube] x: Sign in to confirm you’re not a bot.");
+      return "ok";
+    };
+    const waits: number[] = [];
+    expect(await withBotCheckRetry(flaky, { sleep: async (ms) => void waits.push(ms) })).toBe("ok");
+    expect([n, waits]).toEqual([3, [20_000, 40_000]]);
+    n = 0;
+    await expect(withBotCheckRetry(flaky, { attempts: 2, sleep: async () => undefined })).rejects.toThrow(/not a bot/);
+    expect(n).toBe(2);
+    let m = 0;
+    await expect(
+      withBotCheckRetry(
+        async () => {
+          m++;
+          throw new Error("HTTP Error 429");
+        },
+        { sleep: async () => undefined },
+      ),
+    ).rejects.toThrow(/429/);
+    expect(m).toBe(1);
   });
 });

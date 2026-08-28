@@ -58,6 +58,6 @@ test.describe("public share page", () => {
     await expect(page).toHaveURL(/\/login\?next=/);
     await page.goto("/login");
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /index/);
-    await expect(page).toHaveTitle(/Marrow — talks/);
+    await expect(page).toHaveTitle(/Sign in · Marrow/);
   });
 });

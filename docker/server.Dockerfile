@@ -7,6 +7,10 @@ RUN apt-get update \
  && chmod a+rx /usr/local/bin/yt-dlp \
  # Deno: the JS runtime yt-dlp's YouTube challenge solver supports first-class (Bun is enabled as a fallback by the wrapper).
  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- --no-modify-path >/dev/null \
+ # bgutil PO-token provider plugin for yt-dlp (the token server is the `pot-provider` service in docker-compose.prod.yml;
+ # YTDLP_POT_PROVIDER_URL points yt-dlp at it). A zip in a yt-dlp plugin directory is the no-pip install.
+ && mkdir -p /etc/yt-dlp/plugins \
+ && curl -fsSL https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/latest/download/bgutil-ytdlp-pot-provider.zip -o /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip \
  # Amazon RDS CA bundle so TLS to RDS is verified (DATABASE_SSL=auto picks it up when present).
  && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem \
  && rm -rf /var/lib/apt/lists/*

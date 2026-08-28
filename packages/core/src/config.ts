@@ -83,6 +83,9 @@ export const ConfigSchema = z.object({
   YTDLP_COOKIES: z.string().optional(),
   YTDLP_PROXY: z.string().optional(),
   YTDLP_EXTRA_ARGS: z.string().optional(),
+  // A bgutil PO-token provider (docker-compose.prod.yml runs one): YouTube trusts tokened requests more, so the bot check
+  // on cloud addresses stops being a coin toss. Plugin lives in the server image; this just tells it where the server is.
+  YTDLP_POT_PROVIDER_URL: z.string().optional(),
   FFMPEG_BIN: z.string().default("ffmpeg"),
   FFPROBE_BIN: z.string().default("ffprobe"),
 

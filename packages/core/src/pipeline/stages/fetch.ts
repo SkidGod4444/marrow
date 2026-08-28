@@ -31,7 +31,7 @@ export const fetchStage: StageFn = async (ctx) => {
     doc.published_at = published ? published.toISOString() : null;
   } else {
     log("fetching metadata");
-    const meta = await providers.fetchMetadata(item.sourceUrl);
+    const meta = await providers.fetchMetadata(item.sourceUrl, log);
     doc.title = meta.title ?? doc.title;
     doc.channel = meta.channel ?? meta.uploader ?? "";
     doc.description = (meta.description ?? "").slice(0, 5000);
@@ -42,7 +42,7 @@ export const fetchStage: StageFn = async (ctx) => {
   }
 
   log("downloading media");
-  const src = direct ? await providers.downloadUrl(item.sourceUrl, workDir) : await providers.download(item.sourceUrl, workDir);
+  const src = direct ? await providers.downloadUrl(item.sourceUrl, workDir) : await providers.download(item.sourceUrl, workDir, log);
   const info = await providers.probe(src);
   doc.has_video = info.hasVideo;
   if (!doc.duration_s) doc.duration_s = info.duration;

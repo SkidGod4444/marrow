@@ -18,7 +18,9 @@ export type YtMeta = {
 };
 
 /** Flags every yt-dlp call gets: cookies / proxy for hosts YouTube flags, plus anything the operator appends. */
-export function ytdlpArgs(cfg: Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS">, jsRuntime: string | null = process.execPath): string[] {
+export type YtdlpConfig = Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS" | "YTDLP_POT_PROVIDER_URL">;
+
+export function ytdlpArgs(cfg: YtdlpConfig, jsRuntime: string | null = process.execPath): string[] {
   const out: string[] = [];
   // YouTube streams need yt-dlp's JS challenge solver, which needs a JS runtime; only Deno is enabled by default and a
   // bare box has none — "n challenge solving failed", only image formats. Bun is always here (it runs Marrow), so enable
@@ -26,14 +28,19 @@ export function ytdlpArgs(cfg: Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "Y
   if (jsRuntime) out.push("--js-runtimes", `bun:${jsRuntime}`);
   if (cfg.YTDLP_COOKIES) out.push("--cookies", cfg.YTDLP_COOKIES);
   if (cfg.YTDLP_PROXY) out.push("--proxy", cfg.YTDLP_PROXY);
+  if (cfg.YTDLP_POT_PROVIDER_URL) out.push("--extractor-args", `youtubepot-bgutilhttp:base_url=${cfg.YTDLP_POT_PROVIDER_URL.replace(/\/$/, "")}`);
   if (cfg.YTDLP_EXTRA_ARGS?.trim()) out.push(...cfg.YTDLP_EXTRA_ARGS.trim().split(/\s+/));
   return out;
 }
 
+export const isBotCheck = (message: string) => /confirm you.re not a bot/i.test(message);
+
 /** yt-dlp's stderr in a sentence a person can act on; the raw text stays in the log. */
-export function explainYtdlpError(message: string): string {
-  if (/Sign in to confirm you.re not a bot|confirm you.re not a bot/i.test(message))
-    return "YouTube is asking this server to sign in — it flags cloud addresses. Give yt-dlp a cookies file or a proxy (docs/DEPLOY.md → \"YouTube blocks the server\"), then retry.";
+export function explainYtdlpError(message: string, opts: { hasCookies?: boolean } = {}): string {
+  if (isBotCheck(message))
+    return opts.hasCookies
+      ? "YouTube rejected this server's session just now — it flags cloud addresses even with cookies, usually for a minute or two. Retry; if it keeps happening, export a fresh cookies file (docs/DEPLOY.md → \"YouTube blocks the server\")."
+      : "YouTube is asking this server to sign in — it flags cloud addresses. Give yt-dlp a cookies file or a proxy (docs/DEPLOY.md → \"YouTube blocks the server\"), then retry.";
   if (/Private video|Video unavailable|has been removed|This video is not available/i.test(message)) return "This video is private, removed or not available where the server is.";
   if (/HTTP Error 429|Too Many Requests/i.test(message)) return "YouTube is rate-limiting this server — try again in a while.";
   if (/is not a valid URL|Unsupported URL/i.test(message)) return "That link isn't something yt-dlp can download.";
@@ -41,33 +48,62 @@ export function explainYtdlpError(message: string): string {
   return message;
 }
 
-const explained = (err: unknown): Error => {
+const explained = (cfg: YtdlpConfig, err: unknown): Error => {
   const raw = err instanceof Error ? err.message : String(err);
-  const plain = explainYtdlpError(raw);
+  const plain = explainYtdlpError(raw, { hasCookies: Boolean(cfg.YTDLP_COOKIES) });
   return plain === raw ? (err as Error) : new Error(plain, { cause: err });
 };
 
-export async function fetchMetadata(cfg: Config, url: string): Promise<YtMeta> {
+/**
+ * YouTube's bot check on cloud addresses comes and goes — the same request, same cookies, passes a minute later
+ * (the failing run refreshes the session cookies). So a bot check is retried a couple of times before it fails the
+ * stage; the broker's own retries (30 s apart) sit on top of this.
+ */
+export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; delaysMs?: number[]; sleep?: (ms: number) => Promise<void>; onRetry?: (attempt: number, err: Error) => void } = {}): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const delays = opts.delaysMs ?? [20_000, 40_000];
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!isBotCheck(message) || i >= attempts - 1) throw err;
+      opts.onRetry?.(i + 1, err as Error);
+      await sleep(delays[Math.min(i, delays.length - 1)] ?? 20_000);
+    }
+  }
+}
+
+export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: string) => void } = {}): Promise<YtMeta> {
   try {
-    const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg), url]);
+    const { stdout } = await withBotCheckRetry(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg), url]), {
+      onRetry: (n) => opts.log?.(`YouTube bot check on metadata — retrying (${n}/2)`),
+    });
     return JSON.parse(stdout) as YtMeta;
   } catch (err) {
-    throw explained(err);
+    opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
+    throw explained(cfg, err);
   }
 }
 
 /** Download the best ≤ MAX_VIDEO_HEIGHT mp4 (video+audio) to `${outDir}/source.<ext>` and return the path. */
-export async function download(cfg: Config, url: string, outDir: string): Promise<string> {
+export async function download(cfg: Config, url: string, outDir: string, opts: { log?: (m: string) => void } = {}): Promise<string> {
   const h = cfg.MAX_VIDEO_HEIGHT;
   const format = `bv*[height<=${h}][ext=mp4]+ba[ext=m4a]/bv*[height<=${h}]+ba/b[height<=${h}]/b`;
   try {
-    await exec(cfg.YTDLP_BIN, [
-      "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
-      ...ytdlpArgs(cfg),
-      "-o", join(outDir, "source.%(ext)s"), url,
-    ]);
+    await withBotCheckRetry(
+      () =>
+        exec(cfg.YTDLP_BIN, [
+          "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
+          ...ytdlpArgs(cfg),
+          "-o", join(outDir, "source.%(ext)s"), url,
+        ]),
+      { onRetry: (n) => opts.log?.(`YouTube bot check on download — retrying (${n}/2)`) },
+    );
   } catch (err) {
-    throw explained(err);
+    opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
+    throw explained(cfg, err);
   }
   const files = await readdir(outDir);
   const src = files.find((f) => f.startsWith("source."));

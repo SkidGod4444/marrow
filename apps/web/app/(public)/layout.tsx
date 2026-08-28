@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 /** Public pages (share pages): a brand line and the page — no sign-in, no app chrome. */
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -12,9 +13,14 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             Marrow
           </Link>
           <p className="hidden text-[13px] text-muted-foreground sm:block">Talks and podcasts, turned into readable, searchable knowledge.</p>
-          <Link href="/login" className="ml-auto text-[13px] text-muted-foreground hover:text-foreground">
-            Sign in
-          </Link>
+          <nav aria-label="Account" className="ml-auto flex items-center gap-3">
+            <Link href="/login" className="text-[13px] text-muted-foreground hover:text-foreground">
+              Sign in
+            </Link>
+            <Button size="sm" nativeButton={false} render={<Link href="/signup" />}>
+              Create account
+            </Button>
+          </nav>
         </div>
       </header>
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-5 sm:py-8">

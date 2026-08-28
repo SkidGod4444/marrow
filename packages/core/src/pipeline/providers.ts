@@ -12,8 +12,8 @@ import type { Providers } from "./types.ts";
 
 export function createProviders(cfg: Config): Providers {
   return {
-    fetchMetadata: (url) => ytdlp.fetchMetadata(cfg, url),
-    download: (url, outDir) => ytdlp.download(cfg, url, outDir),
+    fetchMetadata: (url, log) => ytdlp.fetchMetadata(cfg, url, { log }),
+    download: (url, outDir, log) => ytdlp.download(cfg, url, outDir, { log }),
     probe: (path) => ffmpeg.probe(cfg, path),
     extractAudio: (src, out) => ffmpeg.extractAudio(cfg, src, out),
     detectSilences: (path) => ffmpeg.detectSilences(cfg, path),
