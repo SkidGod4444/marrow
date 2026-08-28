@@ -170,7 +170,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
         segments.push({ start: t, end: t + 10, text });
         text.split(" ").forEach((w, i) => ws.push({ word: w, start: t + i * 0.5, end: t + i * 0.5 + 0.4 }));
       }
-      return { language: "en", d, text: segments.map((s) => s.text).join(" "), segments, words: ws };
+      return { language: "en", duration: d, text: segments.map((s) => s.text).join(" "), segments, words: ws };
     },
     async diarize(_path, o, usage) {
       hit("diarize");
