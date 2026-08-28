@@ -129,10 +129,10 @@
   --secondary: var(--ink-2);
   --secondary-foreground: #ececea;
   --muted: var(--ink-2);
-  --muted-foreground: #9a9a96;
+  --muted-foreground: #a6a6a2; /* ≥ 5.1:1 on every ink (4.98 as an 80% placeholder on wells) — WCAG AA for 11px mono */
   --accent: var(--ink-3);
   --accent-foreground: #ececea;
-  --destructive: oklch(0.7 0.19 22);
+  --destructive: oklch(0.74 0.19 22); /* ≥ 4.9:1 on key faces */
   --border: var(--ink-3);
   --input: var(--ink-2);
   --ring: color-mix(in oklch, var(--ink-4), white 25%);
@@ -149,7 +149,7 @@
   --sidebar-accent-foreground: #ececea;
   --sidebar-border: var(--ink-3);
   --sidebar-ring: color-mix(in oklch, var(--ink-4), white 25%);
-  --time: oklch(0.72 0.17 22);
+  --time: oklch(0.74 0.17 22); /* ≥ 4.9:1 on key faces, 7.4:1 on the page */
   --time-foreground: var(--ink-0);
   --kind-paper: #3987e5;
   --kind-tool: #d95926;
@@ -171,6 +171,12 @@
 }
 
 @layer base {
+  /* Placeholders are real hints for people: full muted ink, never faded (Chrome's UA sheet dims them). */
+  ::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }

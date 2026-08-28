@@ -1,11 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, readyItem, test } from "./helpers";
 
-// WCAG 2.x A/AA scan of every main page — serious/critical violations fail; the rest is reported.
+// WCAG 2.x A/AA scan of every main page (colour contrast included) — serious/critical violations fail.
 const scan = async (page: import("@playwright/test").Page) => {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).disableRules(["color-contrast"]).analyze();
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const bad = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-  return bad.map((v) => `${v.id} (${v.impact}): ${v.help} — ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(", ")}`);
+  return bad.map((v) => `${v.id} (${v.impact}): ${v.help}\n${v.nodes.slice(0, 12).map((n) => `  ${n.target.join(" ")}: ${(n.any[0]?.message ?? "").replace(/\s+/g, " ")}`).join("\n")}`);
 };
 
 test.describe("accessibility", () => {

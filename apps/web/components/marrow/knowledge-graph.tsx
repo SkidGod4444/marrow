@@ -600,10 +600,10 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
                 className={`inline-flex cursor-pointer items-center gap-1.5 transition-opacity ${hiddenKinds.has(k) ? "opacity-35 line-through" : ""}`}
                 aria-pressed={!hiddenKinds.has(k)}
               >
-                <span className="inline-block size-2.5 rounded-full" style={{ background: kindColor(k) }} /> {k} <span className="opacity-60">{kindCounts.get(k)}</span>
+                <span className="inline-block size-2.5 rounded-full" style={{ background: kindColor(k) }} /> {k} <span className="text-muted-foreground/90">{kindCounts.get(k)}</span>
               </button>
             ))}
-            <span className="opacity-60">· hatched = contested · dashed edge = opposed · drag pins</span>
+            <span>· hatched = contested · dashed edge = opposed · drag pins</span>
           </div>
         </div>
 

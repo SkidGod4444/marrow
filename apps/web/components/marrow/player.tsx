@@ -190,7 +190,7 @@ function AudioFrame({ className = "", collapsed = false }: { className?: string;
           <span className="flex size-14 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-[0_8px_30px_rgb(0_0_0/0.6)] backdrop-blur-sm transition-transform group-hover/player:scale-105">
             {p.buffering && !p.playing ? <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : p.ended ? <RotateCcw className="size-5" /> : p.playing ? <Pause className="size-5" fill="currentColor" /> : <Play className="ml-0.5 size-6" fill="currentColor" />}
           </span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/60">audio</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/75">audio</span>
         </button>
       )}
       <PlayerControls />
