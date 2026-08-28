@@ -3,7 +3,17 @@ import { type Page, expect, test as base } from "@playwright/test";
 /** Anything the browser logs as an error (uncaught exceptions, console.error incl. React hydration warnings). */
 export type Errors = { list: string[] };
 
-const IGNORE = [/favicon/i, /youtube\.com|ytimg\.com|googlevideo/i, /net::ERR_(BLOCKED|ABORTED)/i, /Download the React DevTools/i, /\[Fast Refresh\]/i, /Failed to load resource: the server responded with a status of 4\d\d/i];
+const IGNORE = [
+  /favicon/i,
+  /youtube\.com|ytimg\.com|googlevideo/i,
+  /net::ERR_(BLOCKED|ABORTED)/i,
+  /Download the React DevTools/i,
+  /\[Fast Refresh\]/i,
+  /Failed to load resource: the server responded with a status of 4\d\d/i,
+  // Next dev server only: React's Server Components performance track occasionally measures with a negative start
+  // (clock/timeOrigin skew on not-found renders). Production builds (CI) never emit it.
+  /cannot have a negative time stamp/i,
+];
 
 export function watchErrors(page: Page): Errors {
   const errors: Errors = { list: [] };

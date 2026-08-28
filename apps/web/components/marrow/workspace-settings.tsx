@@ -28,7 +28,8 @@ const ROLE_HELP: Record<string, string> = {
 export function WorkspaceSettings({ me }: { me: Me }) {
   const org = me.active!;
   const router = useRouter();
-  const canManage = me.permissions.includes("member:update") || me.permissions.includes("invitation:create") || org.role === "owner" || org.role === "admin";
+  const perms = me.permissions ?? [];
+  const canManage = perms.includes("member:update") || perms.includes("invitation:create") || org.role === "owner" || org.role === "admin";
   const workspace = useWorkspaceQuery(org.id);
   const apiKeys = useApiKeysQuery(org.id);
   const members = workspace.data?.members ?? [];
@@ -49,8 +50,8 @@ export function WorkspaceSettings({ me }: { me: Me }) {
   const inviteLink = (id: string) => `${window.location.origin}/invite/${id}`;
 
   // Namespaces: rename (namespace:update) and delete (namespace:delete) — admins and owners.
-  const canRename = me.permissions.includes("namespace:update");
-  const canDelete = me.permissions.includes("namespace:delete");
+  const canRename = perms.includes("namespace:update");
+  const canDelete = perms.includes("namespace:delete");
   const nsQuery = useNamespacesQuery();
   const nsList = nsQuery.data ?? [];
   const rename = useRenameNamespace();
@@ -287,7 +288,7 @@ export function WorkspaceSettings({ me }: { me: Me }) {
       <section className="space-y-3" aria-labelledby="api-keys" id="api-keys">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">API keys for this workspace</h2>
         <p className="reading text-[15px] text-muted-foreground">A key acts as you, inside this workspace, with your role — for Claude Code (MCP), the share-sheet shortcut, or scripts. Shown once; revoke any time.</p>
-        {me.permissions.includes("apikey:manage") ? (
+        {perms.includes("apikey:manage") ? (
           <form
             className="flex flex-wrap items-center gap-2"
             onSubmit={(e) => {

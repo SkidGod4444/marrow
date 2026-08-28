@@ -15,5 +15,5 @@ export function useMe(): Me | null {
 /** `useCan("item:add")` — false when signed out or the role lacks it. Server-side checks remain the authority. */
 export function useCan(permission: string): boolean {
   const me = useMe();
-  return Boolean(me?.permissions.includes(permission));
+  return Boolean(me?.permissions?.includes(permission));
 }

@@ -4,6 +4,7 @@ import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from "@ta
 import { toast } from "sonner";
 import type { Me } from "./api";
 import { authClient } from "./auth-client";
+import { errorFor, fetchWithRetry, readJson } from "./http";
 
 // Client-side server state, in one place: query keys, fetchers and mutations (TanStack Query). Components never call
 // fetch() for data themselves; they read a query and fire a mutation, and invalidation keeps every view in step.
@@ -18,15 +19,26 @@ export const keys = {
 };
 
 async function proxy<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api/marrow/${path}`, { ...init, headers: { "content-type": "application/json", ...init.headers }, cache: "no-store" });
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? res.statusText);
-  return body;
+  const res = await fetchWithRetry(`/api/marrow/${path}`, { ...init, headers: { "content-type": "application/json", ...init.headers }, cache: "no-store" });
+  if (!res.ok) throw await errorFor(res);
+  return readJson<T>(res);
 }
 
 // ---- who am I ----
 export function useMeQuery(initial?: Me | null, opts: Partial<UseQueryOptions<Me | null>> = {}) {
-  return useQuery<Me | null>({ queryKey: keys.me, queryFn: () => proxy<Me>("me").catch(() => null), initialData: initial, staleTime: 60_000, ...opts });
+  return useQuery<Me | null>({
+    queryKey: keys.me,
+    // A failed refresh keeps the last good answer (seeded by the layout); an odd-shaped one is treated as a failure too.
+    queryFn: async () => {
+      const me = await proxy<Me>("me");
+      if (!me || !Array.isArray(me.permissions)) throw new Error("unexpected reply from /me");
+      return me;
+    },
+    initialData: initial,
+    staleTime: 60_000,
+    retry: 2,
+    ...opts,
+  });
 }
 
 // ---- Practice ----

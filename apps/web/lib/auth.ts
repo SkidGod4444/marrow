@@ -1,6 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
-import { type Me, API_URL, AUTH_OFF, apiFetch } from "./api";
+import { type Me, API_URL, ApiError, AUTH_OFF, apiFetch } from "./api";
 
 // Accounts live on the API server (Better Auth). The web app forwards the browser's cookie and asks the API who is
 // calling (`/me`: user, workspaces, active workspace, permissions). MARROW_AUTH=off removes the gate (dev only).
@@ -26,9 +26,12 @@ export async function getSession(): Promise<Session | null> {
 export async function getMe(): Promise<Me | null> {
   try {
     return await apiFetch<Me>("/me");
-  } catch {
-    return null;
+  } catch (err) {
+    // Not signed in (or the API predates accounts): null → the sign-in page. Anything else — the server restarting,
+    // unreachable — is an error the page should say plainly and offer to retry, not a reason to bounce to sign-in.
+    if (err instanceof ApiError && [401, 403, 404].includes(err.status)) return null;
+    throw err;
   }
 }
 
-export const can = (me: Me | null | undefined, permission: string) => Boolean(me?.permissions.includes(permission));
+export const can = (me: Me | null | undefined, permission: string) => Boolean(me?.permissions?.includes(permission));

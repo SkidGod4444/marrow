@@ -1,6 +1,9 @@
 import "server-only";
 import { headers } from "next/headers";
 import type { ExpressionView, InboxEntry, Item, NamespaceGraph, NamespaceSummary, ReviewCard, Source, VideoDocument } from "@marrow/core";
+import { ApiError, fetchWithRetry, readJson } from "./http";
+
+export { ApiError };
 
 // Server-side client for the Marrow API. Requests run as the signed-in user: the browser's session cookie is forwarded
 // to the API (which resolves the workspace and role from it). Client components go through app/api/marrow/[...path].
@@ -23,9 +26,10 @@ export function apiHeaders(extra: Record<string, string> = {}): Record<string, s
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers: await callerHeaders({ "content-type": "application/json", ...(init.headers as Record<string, string>) }), cache: "no-store" });
-  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} → ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return (await res.json()) as T;
+  // GETs ride out a restarting server (retried briefly); a reply that isn't JSON is an error, never data.
+  const res = await fetchWithRetry(`${API_URL}${path}`, { ...init, headers: await callerHeaders({ "content-type": "application/json", ...(init.headers as Record<string, string>) }), cache: "no-store" });
+  if (!res.ok) throw new ApiError(`${init.method ?? "GET"} ${path} → ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status);
+  return readJson<T>(res);
 }
 
 export type PresentedDocument = Omit<VideoDocument, "transcript"> & { transcript: VideoDocument["transcript"] | null; transcript_entries: number; transcript_truncated: boolean };

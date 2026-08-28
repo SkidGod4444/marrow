@@ -1,4 +1,5 @@
 import { API_URL, callerHeaders } from "@/lib/api";
+import { fetchWithRetry } from "@/lib/http";
 import { AUTH_ENABLED, getSession } from "@/lib/auth";
 
 // Transparent proxy to the Marrow API for client components (chat stream, frame images, ingest).
@@ -18,7 +19,10 @@ async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): 
   // Requests run as the signed-in user (their cookie is forwarded); strangers get nothing.
   if (AUTH_ENABLED && !(await getSession())) return Response.json({ error: "sign in first" }, { status: 401 });
   const url = new URL(req.url);
-  const upstream = await fetch(`${API_URL}/${target}${url.search}`, {
+  let upstream: Response;
+  try {
+    // GETs are retried through a restart (lib/http.ts); streamed writes can't be.
+    upstream = await fetchWithRetry(`${API_URL}/${target}${url.search}`, {
     method: req.method,
     headers: await callerHeaders({
       ...(req.headers.get("content-type") ? { "content-type": req.headers.get("content-type")! } : {}),
@@ -26,10 +30,13 @@ async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): 
       accept: req.headers.get("accept") ?? "*/*",
     }),
     body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
-    // @ts-expect-error — Node fetch needs duplex for streamed request bodies
-    duplex: "half",
-    cache: "no-store",
-  });
+      // @ts-expect-error — Node fetch needs duplex for streamed request bodies
+      duplex: "half",
+      cache: "no-store",
+    });
+  } catch {
+    return Response.json({ error: "The server is busy or restarting — try again in a moment." }, { status: 503 });
+  }
   const headers = new Headers();
   for (const h of ["content-type", "cache-control", "x-frame-t", "x-vercel-ai-ui-message-stream", "accept-ranges", "content-range", "content-length"]) {
     const v = upstream.headers.get(h);
