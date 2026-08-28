@@ -48,9 +48,13 @@ export function ytdlpArgs(cfg: YtdlpConfig, jsRuntime: string | null = process.e
 }
 
 export const isBotCheck = (message: string) => /confirm you.re not a bot/i.test(message);
+/** yt-dlp's own verdict when YouTube rotated the exported session (the account was used in a browser after export). */
+export const isStaleCookies = (message: string) => /cookies are no longer valid|have likely been rotated/i.test(message);
 
 /** yt-dlp's stderr in a sentence a person can act on; the raw text stays in the log. */
 export function explainYtdlpError(message: string, opts: { hasCookies?: boolean } = {}): string {
+  if (isStaleCookies(message))
+    return "The YouTube cookies file is no longer valid — YouTube rotated the session because the account was used in a browser after the export. Export a fresh file from a private window and close it (docs/DEPLOY.md → \"YouTube blocks the server\"), then retry.";
   if (isBotCheck(message))
     return opts.hasCookies
       ? "YouTube rejected this server's session just now — it flags cloud addresses even with cookies, usually for a minute or two. Retry; if it keeps happening, export a fresh cookies file (docs/DEPLOY.md → \"YouTube blocks the server\")."
@@ -73,13 +77,16 @@ const explained = (cfg: YtdlpConfig, err: unknown): Error => {
  * flagged for several minutes; quiet, single requests from the same box with the same cookies pass. So a bot check
  * is retried once, after a long pause, and the broker's own retries (5 min, then 10) sit on top of that.
  */
-export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; delaysMs?: number[]; sleep?: (ms: number) => Promise<void>; onRetry?: (attempt: number, err: Error) => void } = {}): Promise<T> {
+export async function withBotCheckRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  opts: { attempts?: number; delaysMs?: number[]; sleep?: (ms: number) => Promise<void>; onRetry?: (attempt: number, err: Error) => void } = {},
+): Promise<T> {
   const attempts = opts.attempts ?? 2;
   const delays = opts.delaysMs ?? [240_000];
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let i = 0; ; i++) {
     try {
-      return await fn();
+      return await fn(i);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!isBotCheck(message) || i >= attempts - 1) throw err;
@@ -88,6 +95,13 @@ export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempt
     }
   }
 }
+
+/**
+ * The cookie path for a given attempt: the owner's cookies first; on a bot check, once without cookies (an address
+ * YouTube does not flag needs none, and stale cookies are worse than none); then, after the long pause, cookies again.
+ */
+export const cookiesForAttempt = (jarPath: string | null, attempt: number): string | null => (attempt === 1 ? null : jarPath);
+const FALLBACK_DELAYS = [2_000, 240_000];
 
 /**
  * One yt-dlp call at a time per process, at least `gapMs` apart. Two workers plus retries once made six page requests
@@ -118,8 +132,10 @@ const youtubeGate = makeGate();
 export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: string) => void } = {}): Promise<YtMeta> {
   const jar = await privateCookies(cfg);
   try {
-    const { stdout } = await withBotCheckRetry(() => youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg, process.execPath, jar.path), url])), {
-      onRetry: (n) => opts.log?.(`YouTube bot check on metadata — waiting 4 min, then one more try (${n}/1)`),
+    const { stdout } = await withBotCheckRetry((attempt) => youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", ...ytdlpArgs(cfg, process.execPath, cookiesForAttempt(jar.path, attempt)), url])), {
+      attempts: jar.path ? 3 : 2,
+      delaysMs: jar.path ? FALLBACK_DELAYS : [240_000],
+      onRetry: (n) => opts.log?.(n === 1 && jar.path ? "YouTube bot check on metadata — trying once without cookies" : "YouTube bot check on metadata — waiting 4 min, then one more try"),
     });
     return JSON.parse(stdout) as YtMeta;
   } catch (err) {
@@ -137,15 +153,19 @@ export async function download(cfg: Config, url: string, outDir: string, opts: {
   const jar = await privateCookies(cfg);
   try {
     await withBotCheckRetry(
-      () =>
+      (attempt) =>
         youtubeGate(() =>
           exec(cfg.YTDLP_BIN, [
-            "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
-            ...ytdlpArgs(cfg, process.execPath, jar.path),
+            "--no-playlist", "--no-progress", "-f", format, "--merge-output-format", "mp4",
+            ...ytdlpArgs(cfg, process.execPath, cookiesForAttempt(jar.path, attempt)),
             "-o", join(outDir, "source.%(ext)s"), url,
           ]),
         ),
-      { onRetry: (n) => opts.log?.(`YouTube bot check on download — waiting 4 min, then one more try (${n}/1)`) },
+      {
+        attempts: jar.path ? 3 : 2,
+        delaysMs: jar.path ? FALLBACK_DELAYS : [240_000],
+        onRetry: (n) => opts.log?.(n === 1 && jar.path ? "YouTube bot check on download — trying once without cookies" : "YouTube bot check on download — waiting 4 min, then one more try"),
+      },
     );
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
@@ -230,4 +250,30 @@ export function canonicalizeSourceUrl(url: string): string {
 export function publishedAtFromUploadDate(d?: string): Date | null {
   if (!d || !/^\d{8}$/.test(d)) return null;
   return new Date(`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T00:00:00Z`);
+}
+
+export type YoutubeStatus = "ok" | "cookies_stale" | "blocked" | "error" | "unconfigured";
+/** A tiny public video (19 s, 2005): enough to learn whether YouTube talks to this box with the configured cookies. */
+export const YOUTUBE_PROBE_URL = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+
+/** yt-dlp's stderr → what the operator needs to know. */
+export function classifyYoutubeProbe(result: { ok: boolean; stderr: string }): YoutubeStatus {
+  if (isStaleCookies(result.stderr)) return "cookies_stale";
+  if (result.ok) return "ok";
+  if (isBotCheck(result.stderr)) return "blocked";
+  return "error";
+}
+
+/** One request, at boot and every few hours, so `/health` can say whether YouTube ingests will work before anyone tries. */
+export async function probeYoutube(cfg: Config): Promise<{ status: YoutubeStatus; detail?: string }> {
+  const jar = await privateCookies(cfg);
+  try {
+    const r = await youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--simulate", ...ytdlpArgs(cfg, process.execPath, jar.path), YOUTUBE_PROBE_URL]));
+    return { status: classifyYoutubeProbe({ ok: true, stderr: r.stderr }), detail: r.stderr.split("\n").find((l) => /WARNING/.test(l))?.slice(0, 200) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { status: classifyYoutubeProbe({ ok: false, stderr: message }), detail: message.slice(-200) };
+  } finally {
+    await jar.cleanup();
+  }
 }

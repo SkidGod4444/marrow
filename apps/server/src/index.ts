@@ -1,4 +1,4 @@
-import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob, recoverJobs, failJobIfUnstarted, probeStorage, backfillUsageFromJobs } from "@marrow/core";
+import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob, recoverJobs, failJobIfUnstarted, probeStorage, backfillUsageFromJobs, probeYoutube } from "@marrow/core";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { pollDeps, realRetrieval } from "./deps.ts";
@@ -57,7 +57,18 @@ if (fake && fakeDeps) {
   const seeded = await fake.seedFakeAccounts(db, auth, (m) => console.log(`[fake] ${m}`));
   if (process.env.MARROW_FAKE_SEED !== "0") await fake.seedFakeCorpus({ db, storage, config, providers: fakeDeps.providers, organizationId: seeded.organizationId }, (m) => console.log(`[fake] ${m}`));
 }
-const health = { storage: () => storageStatus };
+// YouTube reachability with the configured cookies: one tiny request at boot and every 6 hours, on /health as `youtube`.
+// "cookies_stale" is the verdict that once cost a day: the exported session had been rotated by the browser.
+let youtubeStatus = "unknown";
+const checkYoutube = async () => {
+  if (fake) return;
+  const r = await probeYoutube(config);
+  if (r.status !== youtubeStatus) console.log(`[youtube] ${r.status}${r.detail ? ` — ${r.detail}` : ""}`);
+  youtubeStatus = r.status;
+};
+void checkYoutube().catch((e) => console.error("[youtube] probe failed:", e));
+setInterval(() => void checkYoutube().catch(() => undefined), 6 * 60 * 60_000).unref();
+const health = { storage: () => storageStatus, youtube: () => youtubeStatus };
 const deps = fakeDeps ? { db, storage, config, queue, auth, health, ...fakeDeps } : { db, storage, config, queue, auth, health, ...realRetrieval(config) };
 const app = createApp(deps);
 

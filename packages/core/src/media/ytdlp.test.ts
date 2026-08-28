@@ -15,7 +15,7 @@ describe("canonicalizeSourceUrl", () => {
 });
 
 import { readFile, stat } from "node:fs/promises";
-import { explainYtdlpError, makeGate, privateCookies, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
+import { classifyYoutubeProbe, cookiesForAttempt, explainYtdlpError, makeGate, privateCookies, withBotCheckRetry, ytdlpArgs } from "./ytdlp.ts";
 
 describe("yt-dlp on a flagged host", () => {
   it("passes cookies, proxy and extra args through to every call", () => {
@@ -35,6 +35,17 @@ describe("yt-dlp on a flagged host", () => {
     expect(explainYtdlpError("ffmpeg exited 1: something odd")).toBe("ffmpeg exited 1: something odd");
     // with cookies configured the advice is different: it is the intermittent check, not a missing file
     expect(explainYtdlpError("ERROR: [youtube] x: Sign in to confirm you’re not a bot.", { hasCookies: true })).toMatch(/rejected this server's session just now/);
+    // yt-dlp's own verdict on a rotated session wins over the bot check that follows it
+    expect(explainYtdlpError("WARNING: [youtube] The provided YouTube account cookies are no longer valid. They have likely been rotated in the browser as a security measure.\nERROR: [youtube] x: Sign in to confirm you’re not a bot.", { hasCookies: true })).toMatch(/no longer valid.*private window/);
+  });
+
+  it("classifies the health probe and orders the attempts: cookies, then none, then cookies again", () => {
+    expect(classifyYoutubeProbe({ ok: true, stderr: "" })).toBe("ok");
+    expect(classifyYoutubeProbe({ ok: true, stderr: "WARNING: [youtube] The provided YouTube account cookies are no longer valid." })).toBe("cookies_stale");
+    expect(classifyYoutubeProbe({ ok: false, stderr: "ERROR: [youtube] x: Sign in to confirm you’re not a bot." })).toBe("blocked");
+    expect(classifyYoutubeProbe({ ok: false, stderr: "ERROR: something else" })).toBe("error");
+    expect([0, 1, 2].map((a) => cookiesForAttempt("/tmp/jar", a))).toEqual(["/tmp/jar", null, "/tmp/jar"]);
+    expect(cookiesForAttempt(null, 1)).toBeNull();
   });
 
   it("gives every run a private copy of the cookies and never touches the owner's file", async () => {

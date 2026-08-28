@@ -10,6 +10,7 @@ export * from "./openai/embed.ts";
 export * from "./openai/text.ts";
 export * from "./queue.ts";
 export * from "./storage/probe.ts";
+export { classifyYoutubeProbe, probeYoutube, YOUTUBE_PROBE_URL } from "./media/ytdlp.ts";
 export * from "./pipeline/types.ts";
 export * from "./pipeline/providers.ts";
 export * from "./pipeline/runner.ts";
