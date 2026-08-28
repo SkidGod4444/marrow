@@ -156,7 +156,7 @@ The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passe
 YouTube flags cloud addresses: from the EC2 box every `yt-dlp` client gets `Sign in to confirm you're not a bot`, and the inbox card says *YouTube is asking this server to sign in*. yt-dlp's answer is a **cookies file from a signed-in browser**. Use a **spare Google account** made for this (YouTube may act on the account it sees downloading), and don't keep using that account in the same browser afterwards — YouTube rotates the cookies and the file goes stale.
 
 1. In Chrome, sign in to YouTube with the spare account, install *Get cookies.txt LOCALLY*, open youtube.com, export → `youtube-cookies.txt` (Netscape format).
-2. Copy it to the box (the folder is git-ignored and mounted read-only into the container):
+2. Copy it to the box (the folder is git-ignored and mounted into the container — writable, because yt-dlp rewrites the file as YouTube rotates cookies):
    ```bash
    scp -i marrow-key.pem youtube-cookies.txt ubuntu@<ip>:~/marrow/secrets/youtube-cookies.txt
    ```
