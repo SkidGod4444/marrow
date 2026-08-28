@@ -13,6 +13,8 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 - **Phase 5 — Capture + text sources** ✅ `POST /capture` (URL → readable text or PDF, or pasted text; social posts need the text), iOS/Android share sheet + bookmarklet (`docs/CAPTURE.md`), inbound-email webhook, RSS/podcast feeds through the same subscriptions, linked-video offers, Obsidian-ready markdown with front-matter.
 - **Phase 6 — Language mode + review queue** ✅ namespaces flagged `language_learning` mine idioms, phrasal verbs and slang from podcasts/videos with playable exact-span clips (word-timestamp aligned), a Language tab, and a **Practice** page (`/review`) of flashcards on a 2 d / 7 d / 30 d schedule.
 
+- **Accounts, workspaces, roles** ✅ open sign-up, workspaces with viewer / member / admin / owner, invitation links, personal API keys, and a Settings page (members, invitations, namespaces, keys) — see below.
+
 All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
 
 ## Accounts, workspaces and roles
@@ -52,6 +54,8 @@ bun run web                    # Next.js on :3000 — sign up, you get a workspa
 ```
 
 `/` is the **inbox** (PRD §6.4): every ready video you haven't skipped, newest first, with its summary and — once a namespace has more than five items — a novelty verdict ("34% new" + the new spans as timecodes). Read / Chat open the item; Skip archives it (undo in the toast). `/library` lists namespaces with their corpus summary, what they **follow** (playlists/channels, polled every `POLL_EVERY_MINUTES`, "check now" per source), an add form (**Add to \<namespace\>**: YouTube video → ingest, playlist/channel/feed → follow, anything else → capture; **Text** mode captures pasted text; **New namespace…** asks for a name — tick *Language learning* for expressions + clips), a per-namespace **Language mode** switch, and links to each namespace's **chat** and **graph**. `/namespaces/<name>/chat` is the cross-video research chat: it searches the corpus with the §8 tools and cites `[Title @ MM:SS](/items/…?t=…)` links that open the item at that moment. `/items/<id>` is the item page: sticky YouTube player + **Reader** (summary, takeaways, sections with timestamp margin links, "Ask about this" → chat), **Chat** (cites `[MM:SS]`; clicking seeks the player; "What's on screen now" sends the playback position so the model calls `view_frame`), **Transcript** (follows the playhead). The browser never sees the API key — client calls go through `app/api/marrow/[...path]`, which injects it only for the signed-in owner (`proxy.ts` + the `(app)` layout gate every page; `/login` is the only public page). `/review` (**Practice**, shown once language mode is in use) is the flashcard queue.
+
+**Workspaces & Settings** — the header shows the workspace you are in (switch or create one from it); `/settings` has the members and their roles, invitation links, the namespaces (rename / delete for admins and owners — deleting removes every item, after a confirmation), and your API keys. What you can't do is hidden; the server enforces it regardless.
 
 **Read as text / share** — every item has a text version at `/items/<id>/read`: summary, takeaways, then the transcript as speaker-labelled dialogue with timecodes that open the video at that moment. Copy as Markdown, download `.md` / `.txt`, print to PDF, or share the link. Same content over the API (`GET /items/:id/export.md?transcript=1`, `GET /items/:id/export.txt`) and MCP (`export_markdown` with `format`).
 
@@ -124,6 +128,8 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 All routes except `/health`, `/auth/status` and `/api/auth/*` need a session cookie or `x-api-key` (or `Authorization: Bearer`) — a personal key (`mrw_…`, bound to its workspace) or the instance key plus `x-marrow-org`. Every response is scoped to that workspace; `GET /me` tells you who you are and what you may do.
 
 ## Development
+
+Deploying: `docs/DEPLOY.md` (API on AWS behind Caddy, web on Vercel, push-to-deploy). `GET /health` on the API and `GET /api/version` on the web app report the commit they run, so `curl` answers whether the latest push is live.
 
 | Task | Command |
 |---|---|

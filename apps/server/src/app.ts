@@ -20,11 +20,14 @@ type Env = { Variables: { principal: Principal } };
  * Every data route runs as a principal (session cookie, per-user API key, or the instance key) inside one workspace,
  * and checks the permission matrix in auth.ts before touching anything.
  */
+const STARTED_AT = new Date().toISOString();
+
 export function createApp(deps: AppDeps) {
   const app = new Hono<Env>();
   const principalDeps = { db: deps.db, auth: deps.auth, instanceKey: deps.config.MARROW_API_KEY, authOff: deps.config.MARROW_AUTH === "off" };
 
-  app.get("/health", (c) => c.json({ ok: true }));
+  // Which build is serving (commit from the Docker build arg) and since when — enough to verify a deploy with one curl.
+  app.get("/health", (c) => c.json({ ok: true, commit: deps.config.MARROW_COMMIT ?? null, started_at: STARTED_AT }));
 
   // ---- Accounts, workspaces, API keys (Better Auth) — proxied by the web app; public by design ----
   if (deps.auth) {

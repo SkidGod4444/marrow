@@ -13,6 +13,7 @@ test.describe("accounts", () => {
     await expect(page.getByRole("link", { name: "Create an account" })).toBeVisible();
     const api = await page.request.get("/api/marrow/namespaces");
     expect(api.status()).toBe(401);
+    expect((await page.request.get("/api/version")).status()).toBe(200); // build identity stays public
   });
 
   test("wrong password → plain error; right password → in, in the Demo Lab workspace; sign out → back to login", async ({ page }) => {

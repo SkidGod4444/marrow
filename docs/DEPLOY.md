@@ -2,7 +2,7 @@
 
 Two deployables:
 
-- **Web app (`apps/web`) → Vercel.** Pure Next.js; talks to the API over HTTPS with the owner key from its env. Nothing else.
+- **Web app (`apps/web`) → Vercel.** Pure Next.js; talks to the API over HTTPS; people sign in, and the proxy forwards their session. Nothing else.
 - **Server (`apps/server`) → AWS.** REST + MCP + the ingestion pipeline (ffmpeg/yt-dlp) on **one EC2 instance** with docker-compose (server + Caddy), **RDS PostgreSQL** with pgvector, **one S3 bucket**. ≈ $40/month, all credit-eligible. No ALB, NAT Gateway, ECS, Aurora, CloudFront, or Route 53 needed.
 
 You need two DNS names at your registrar: `api.marrow.yourdomain.com` → the EC2 Elastic IP (A record), and `marrow.yourdomain.com` → Vercel (CNAME, Vercel tells you the target).
@@ -74,7 +74,7 @@ S3_REGION=<your region>
 OPENAI_API_KEY=sk-...
 MARROW_API_KEY=<openssl rand -hex 24>
 MARROW_WEB_URL=https://marrow.yourdomain.com # the address people open the web app at (owner login cookies + CSRF)
-BETTER_AUTH_SECRET=<openssl rand -hex 32>    # signs login sessions; changing it signs the owner out once
+BETTER_AUTH_SECRET=<openssl rand -hex 32>    # signs login sessions; changing it signs everyone out once
 INBOUND_EMAIL_TOKEN=<openssl rand -hex 24>   # only if you wire inbound email (docs/CAPTURE.md §3)
 MARROW_API_DOMAIN=api.marrow.yourdomain.com
 ```
@@ -130,6 +130,18 @@ FORCE=1 ./scripts/deploy-ec2.sh                  # rebuild even when nothing cha
 ```
 
 Only server-side changes matter to the box; a web-only commit rebuilds in a minute or two and restarts the same code. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR on GitHub.
+
+### Is the latest commit live?
+
+Both surfaces say which build they run — no SSH needed:
+
+```bash
+curl -s https://api.marrow.yourdomain.com/health     # {"ok":true,"commit":"29c8538","started_at":"2026-08-28T05:12:03.412Z"}
+curl -s https://marrow.yourdomain.com/api/version    # {"ok":true,"commit":"29c8538","ref":"main","env":"production"}
+git rev-parse --short origin/main                     # what both should say
+```
+
+The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passes to the image (`"unknown"` when the image was built by hand without it); `started_at` moves on every restart. Vercel's comes from its system variable `VERCEL_GIT_COMMIT_SHA` — if it reads `null`, turn on *Automatically expose System Environment Variables* (Project → Settings → Environment Variables) and redeploy. If the API lags `origin/main` for more than a couple of minutes, read the timer's log on the box: `journalctl -u marrow-deploy.service -n 50`.
 
 ## Accounts
 

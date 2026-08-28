@@ -206,3 +206,7 @@ Owner decision, in their words: "make it a multi user app, a proper SAAS dont do
 ## 2026-08-28 — Client state: TanStack Query + Zustand
 
 Owner: "use proper state manager sdks". Client components keep server state in **TanStack Query** (`apps/web/lib/queries.ts`: me, workspace roster, API keys, practice summary, and the learn / answer / skip / retry / workspace mutations; cache invalidation replaces the ad-hoc `marrow:reviews-changed` window event) and per-browser preferences in **Zustand** with `persist` (`lib/store.ts`: graph layout/labels/filters, shared-page player, practice progress) instead of hand-rolled `localStorage` code. Server components still fetch via `lib/api.ts` and re-render with `router.refresh()`.
+
+## 2026-08-28 — Build identity: `GET /health` and `/api/version` report the commit
+
+Checking whether a push had reached the box meant SSH and `journalctl`. The Docker build now bakes the git SHA in (`GIT_SHA` build arg → `MARROW_COMMIT`, set by `scripts/deploy-ec2.sh`), `GET /health` returns `{ ok, commit, started_at }`, and the web app's public `/api/version` returns Vercel's `VERCEL_GIT_COMMIT_SHA`. A short SHA gives nothing away, so both stay unauthenticated: a plain `curl` (or an uptime checker) answers "is the latest commit live?". Config stays env-only. (docs/DEPLOY.md Part C)

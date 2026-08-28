@@ -13,6 +13,7 @@ if [ "${FORCE:-0}" != "1" ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse "ori
 fi
 echo "deploying $(git rev-parse --short HEAD) → $(git rev-parse --short "origin/$BRANCH")"
 git reset --hard --quiet "origin/$BRANCH"
+export GIT_SHA="$(git rev-parse --short HEAD)"   # → MARROW_COMMIT in the image → GET /health {"commit"}
 $COMPOSE up -d --build --remove-orphans
 docker image prune -f >/dev/null
 

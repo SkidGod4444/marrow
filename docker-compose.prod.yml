@@ -3,7 +3,10 @@
 #   docker compose -f docker-compose.prod.yml up -d --build
 services:
   server:
-    build: { context: ., dockerfile: docker/server.Dockerfile }
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+      args: { GIT_SHA: "${GIT_SHA:-unknown}" } # baked into the image; GET /health reports it
     env_file: [.env]
     environment:
       STORAGE_DRIVER: s3

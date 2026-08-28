@@ -20,6 +20,9 @@ RUN bun install --frozen-lockfile --production
 COPY apps/server apps/server
 COPY packages/core packages/core
 
+# Build identity: scripts/deploy-ec2.sh passes the git SHA; GET /health reports it so a curl tells which commit is live.
+ARG GIT_SHA=unknown
+ENV MARROW_COMMIT=$GIT_SHA
 ENV NODE_ENV=production PORT=3001 WORK_DIR=/data/work
 VOLUME ["/data"]
 EXPOSE 3001
