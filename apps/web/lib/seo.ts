@@ -3,7 +3,7 @@ import type { Item, VideoDocument } from "@marrow/core";
 // Search engines and link previews for the public share pages (/items/:id/read): structured data, canonical URLs.
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")).replace(/\/$/, "");
-export const SITE_DESCRIPTION = "Talks, lectures and podcasts turned into readable, searchable, citable knowledge — timestamped transcripts, articles with references, and a research chat.";
+export const SITE_DESCRIPTION = "Marrow turns the podcasts, YouTube tutorials, posts, newsletters and papers you consume into one research brain — searchable to the second, cited to the source, ready to be pushed into new ideas.";
 
 export const youtubeIdOf = (url: string): string | null => {
   const m = /(?:v=|youtu\.be\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/.exec(url);

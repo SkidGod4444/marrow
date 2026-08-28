@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import type { ReactNode } from "react";
+import { BRAIN_ASCII } from "./brain-ascii";
 
 // Shared OpenGraph rendering: the app's own look (charcoal, serif title, mono metadata, timecode keycaps).
 
@@ -73,23 +74,42 @@ export async function ogFonts() {
   ];
 }
 
-export async function renderOg(input: { eyebrow: string; title: string; meta?: string[]; timecodes?: string[]; footer?: string }) {
+export async function renderOg(input: { eyebrow: string; title: string; meta?: string[]; timecodes?: string[]; footer?: string; muted?: string }) {
   const [fonts, mark] = await Promise.all([ogFonts(), markDataUrl()]);
   const title = input.title.length > 110 ? `${input.title.slice(0, 108)}…` : input.title;
-  const titleSize = title.length > 70 ? 54 : title.length > 40 ? 64 : 76;
+  const titleSize = title.length > 70 ? 50 : title.length > 40 ? 58 : 68;
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: OG.bg, color: OG.fg, padding: "56px 64px", fontFamily: "Source Serif 4" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={mark} width={52} height={52} style={{ borderRadius: 12 }} alt="" />
-          <div style={{ fontSize: 34, fontWeight: 600, letterSpacing: -0.5 }}>Marrow</div>
-          <div style={{ marginLeft: "auto", fontFamily: "IBM Plex Mono", fontSize: 20, color: OG.muted, letterSpacing: 3, textTransform: "uppercase" }}>{input.eyebrow}</div>
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: OG.bg, color: OG.fg, padding: "52px 60px", fontFamily: "Source Serif 4", position: "relative" }}>
+        {/* the brain, in type, behind the right half */}
+        <div
+          style={{
+            position: "absolute",
+            right: 44,
+            top: 168,
+            fontFamily: "IBM Plex Mono",
+            fontSize: 11.6,
+            lineHeight: 1.0,
+            whiteSpace: "pre",
+            color: "#9a9a96",
+            opacity: 0.8,
+            display: "flex",
+          }}
+        >
+          {BRAIN_ASCII}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: 1, marginTop: 24 }}>
-          <div style={{ fontSize: titleSize, fontWeight: 600, lineHeight: 1.12, letterSpacing: -1, display: "flex" }}>{title}</div>
+        <div style={{ position: "absolute", left: 0, top: 0, width: 760, height: 630, background: "linear-gradient(90deg, #111111 62%, rgba(17,17,17,0))", display: "flex" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={mark} width={46} height={46} style={{ borderRadius: 11 }} alt="" />
+          <div style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.5 }}>Marrow</div>
+          <div style={{ marginLeft: 26, fontFamily: "IBM Plex Mono", fontSize: 17, color: OG.muted, letterSpacing: 3, textTransform: "uppercase", display: "flex" }}>{input.eyebrow}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: 1, marginTop: 20, position: "relative", maxWidth: 740 }}>
+          {input.muted ? <div style={{ fontSize: titleSize, fontWeight: 600, lineHeight: 1.1, letterSpacing: -1, display: "flex", color: OG.muted }}>{input.muted}</div> : null}
+          <div style={{ fontSize: titleSize, fontWeight: 600, lineHeight: 1.1, letterSpacing: -1, display: "flex" }}>{title}</div>
           {input.meta?.length ? (
-            <div style={{ display: "flex", gap: 28, marginTop: 26, fontFamily: "IBM Plex Mono", fontSize: 22, color: OG.muted }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 22, marginTop: 24, fontFamily: "IBM Plex Mono", fontSize: 17, color: OG.muted }}>
               {input.meta.map((m, i) => (
                 <div key={i} style={{ display: "flex" }}>
                   {m}
@@ -98,15 +118,14 @@ export async function renderOg(input: { eyebrow: string; title: string; meta?: s
             </div>
           ) : null}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
-          <div style={{ position: "absolute", left: 0, right: 0, top: 19, height: 2, background: OG.hairline }} />
-          {(input.timecodes ?? ["00:00", "12:34", "48:10"]).map((t, i) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
+          {(input.timecodes ?? []).map((t, i) => (
             <Keycap key={i} live={i === 1}>
               {t}
             </Keycap>
           ))}
           {input.footer ? (
-            <div style={{ marginLeft: "auto", fontFamily: "IBM Plex Mono", fontSize: 20, color: OG.muted, background: OG.bg, paddingLeft: 16 }}>{input.footer}</div>
+            <div style={{ marginLeft: input.timecodes?.length ? 18 : 0, fontFamily: "IBM Plex Mono", fontSize: 18, color: OG.muted, display: "flex" }}>{input.footer}</div>
           ) : null}
         </div>
       </div>
