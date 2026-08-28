@@ -2,7 +2,7 @@
 
 Everything that isn't a video enters through **capture**: a web page, a paper, a pasted post, a newsletter, or a feed entry. The text is fetched or stored, turned into an article (summary, takeaways, sections), enriched (references, claims, entity index), split into searchable segments and triaged for novelty — the same document shape as a video, minus timestamps. Capture is idempotent: the same URL (or the same pasted text) in the same namespace is one item.
 
-All examples use `API=https://<api-host>` and `KEY=<MARROW_API_KEY>`.
+All examples use `API=https://<api-host>` and `KEY=<MARROW_API_KEY>`. These talk to the API directly with the key, so the web app's owner login doesn't get in the way (and the bookmarklet works from any page); to add from inside the web app, use the Library's **Add to …** form instead.
 
 ## 1. From anything: `POST /capture`
 

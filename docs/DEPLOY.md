@@ -73,6 +73,8 @@ S3_BUCKET=marrow-<something-unique>
 S3_REGION=<your region>
 OPENAI_API_KEY=sk-...
 MARROW_API_KEY=<openssl rand -hex 24>
+MARROW_WEB_URL=https://marrow.yourdomain.com # the address people open the web app at (owner login cookies + CSRF)
+BETTER_AUTH_SECRET=<openssl rand -hex 32>    # signs login sessions; changing it signs the owner out once
 INBOUND_EMAIL_TOKEN=<openssl rand -hex 24>   # only if you wire inbound email (docs/CAPTURE.md §3)
 MARROW_API_DOMAIN=api.marrow.yourdomain.com
 ```
@@ -101,7 +103,7 @@ Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
    - `MARROW_API_KEY` = the same value as in the server's `.env`
    - `NEXT_PUBLIC_SITE_URL` = `https://marrow.yourdomain.com` (optional; falls back to the Vercel production URL)
 4. Deploy. Then *Settings → Domains* → add `marrow.yourdomain.com` and create the CNAME Vercel shows at your registrar.
-5. Check `https://marrow.yourdomain.com` (inbox), an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
+5. Open `https://marrow.yourdomain.com`: the first visit shows **Create your account** — do it straight away (sign-up closes after the first account; see "Owner login" below). Then check the inbox, an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
 
 Every push to `main` redeploys the web app; the API on EC2 updates with `git pull` + compose as above.
 
@@ -131,14 +133,14 @@ Only server-side changes matter to the box; a web-only commit rebuilds in a minu
 
 ## Owner login
 
-The web app is private: the first person to open it creates the owner account (email + password), and sign-up closes for good after that — so do it right after the first deploy. Two variables on the **server** (`.env` on the box, then `FORCE=1 ./scripts/deploy-ec2.sh`):
+The web app is private: the first person to open it creates the owner account (email + password), and sign-up closes for good after that — so do it right after the first deploy. Two variables on the **server** (`.env` on the box; the next deploy — any push to `main`, or `FORCE=1 ./scripts/deploy-ec2.sh` — restarts the container with them):
 
 ```
 MARROW_WEB_URL=https://try-marrow.vercel.app      # exactly the address you open the web app at
 BETTER_AUTH_SECRET=<openssl rand -hex 32>
 ```
 
-Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. MCP and the CLI keep using `MARROW_API_KEY`. Forgot the password? There is no reset e-mail in a single-owner tool — delete the row in `auth_user` on RDS and open the web app again to recreate the account.
+Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. The gate is `apps/web/proxy.ts` plus the `(app)` layout; `MARROW_AUTH=off` in the web app's env removes it (local development only — never on Vercel). Until `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` are set, the server derives a secret from `MARROW_API_KEY` and trusts the web proxy's origin, so a fresh deploy can still sign in. MCP and the CLI keep using `MARROW_API_KEY`. Forgot the password? There is no reset e-mail in a single-owner tool — delete the row in `auth_user` on RDS and open the web app again to recreate the account.
 
 ## Database migrations
 
