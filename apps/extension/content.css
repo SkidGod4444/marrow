@@ -1,18 +1,17 @@
-/* The in-page "Save to Marrow" controls. Kept to the host sites' own control sizes. */
+/* The in-page "Save to Marrow" controls, drawn as a vector glyph in currentColor so they sit like the sites' own icons. */
 .marrow-save { cursor: pointer; }
-.marrow-save img { width: 22px; height: 22px; border-radius: 6px; vertical-align: middle; opacity: .92; transition: transform .12s ease, opacity .12s ease; }
-.marrow-save:hover img { opacity: 1; transform: translateY(-1px); }
-.marrow-save.marrow-busy img { opacity: .5; }
-.marrow-save.marrow-saved img { box-shadow: 0 0 0 2px #7fbf8a; }
-/* YouTube: a ytp-button is 48×48 with the glyph centred */
-.ytp-right-controls .marrow-save { display: inline-flex; align-items: center; justify-content: center; width: 48px; vertical-align: top; }
-.ytp-right-controls .marrow-save img { width: 24px; height: 24px; }
+.marrow-save svg { transition: transform .12s ease; }
+.marrow-save:hover svg { transform: translateY(-1px); }
+.marrow-save.marrow-busy svg { opacity: .5; }
+.marrow-save.marrow-saved { color: #7fbf8a; }
+/* YouTube: the same box as every other ytp-button; the 24×24 svg is sized by the player's own CSS */
+.ytp-right-controls .marrow-save { color: #fff; }
 /* X: mimic the round action buttons */
 .marrow-wrap { display: flex; align-items: center; }
-.marrow-round { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; }
-.marrow-round:hover { background: rgba(236, 236, 234, .1); }
-.marrow-round img { width: 20px; height: 20px; }
+.marrow-round { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: rgb(113, 118, 123); }
+.marrow-round:hover { background: rgba(113, 118, 123, .12); color: rgb(29, 155, 240); }
+.marrow-round svg { width: 22px; height: 22px; }
 /* LinkedIn: a text button like Like / Comment */
 .marrow-li { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 10px; border: 0; border-radius: 4px; background: none; color: rgba(0,0,0,.6); font: 600 14px system-ui, sans-serif; }
 .marrow-li:hover { background: rgba(0,0,0,.08); }
-.marrow-li img { width: 20px; height: 20px; }
+.marrow-li svg { width: 22px; height: 22px; }

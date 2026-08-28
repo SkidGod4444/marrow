@@ -1,5 +1,5 @@
 // In-page controls: a "Save to Marrow" button inside the YouTube player's control bar and in each X / LinkedIn post's
-// action row. Left-click saves to the last namespace used; right-click picks a namespace. Everything talks to the
+// action row. A click opens "Save to" with a namespace dropdown (the last one used preselected) and a Save key. Everything talks to the
 // background worker, which holds the key and does the API calls. Sites re-render constantly, so a MutationObserver
 // re-injects; SPA navigations on YouTube are caught via yt-navigate-finish. No innerHTML anywhere: YouTube enforces
 // Trusted Types, so everything is built as nodes.
@@ -24,6 +24,19 @@
     return n;
   };
   const icon = (size) => el("img", { src: ICON, alt: "", width: String(size), height: String(size) });
+  /** The two eyes of the mark as a vector glyph in currentColor (pupils cut out), drawn in the same 24×24 box as
+   *  YouTube's own player icons so the sites' CSS sizes and centres it like a native one. */
+  const eye = (cx, cy, px, py) => `M${cx - 5},${cy}a5,6.5 0 1,0 10,0a5,6.5 0 1,0 -10,0ZM${px - 2},${py}a2,2 0 1,0 4,0a2,2 0 1,0 -4,0Z`;
+  function glyph() {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("width", "24"); svg.setAttribute("height", "24"); svg.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", eye(7.2, 12, 8.4, 12.5) + eye(16.8, 12, 18, 12.5));
+    p.setAttribute("fill", "currentColor"); p.setAttribute("fill-rule", "evenodd");
+    svg.appendChild(p);
+    return svg;
+  }
 
   // ---- a toast and a namespace menu, in a shadow root so the sites' CSS stays out ----
   const shell = el("div", { style: "position:fixed;z-index:2147483646;inset:auto 16px 16px auto;pointer-events:none;" });
@@ -90,17 +103,18 @@
     toast(parts);
   }
   function wire(btn, getPayload) {
-    btn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); save(getPayload(), btn); });
-    btn.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); menu(e.clientX, e.clientY, (ns) => save(getPayload(), btn, ns)); });
+    const open = (e) => { e.preventDefault(); e.stopPropagation(); const r = btn.getBoundingClientRect(); menu(r.left + r.width / 2, r.top, (ns) => save(getPayload(), btn, ns)); };
+    btn.addEventListener("click", open);
+    btn.addEventListener("contextmenu", open);
   }
-  const TITLE = "Save to Marrow (right-click to pick a namespace)";
+  const TITLE = "Save to Marrow";
 
   // ---- YouTube: inside the player's right controls ----
   function injectYouTube() {
     if (!location.pathname.startsWith("/watch")) return;
     const controls = document.querySelector(".ytp-right-controls");
     if (!controls || controls.querySelector(".marrow-save")) return;
-    const btn = el("button", { class: "ytp-button marrow-save", title: TITLE, "aria-label": "Save to Marrow" }, [icon(24)]);
+    const btn = el("button", { class: "ytp-button marrow-save", title: TITLE, "aria-label": "Save to Marrow", "data-tooltip-title": TITLE }, [glyph()]);
     controls.insertBefore(btn, controls.firstChild);
     wire(btn, () => ({ kind: "youtube", url: location.href, title: document.title.replace(/ - YouTube$/, "") }));
   }
@@ -110,7 +124,7 @@
     for (const art of document.querySelectorAll('article[data-testid="tweet"]')) {
       const bar = art.querySelector('[role="group"]');
       if (!bar || bar.querySelector(".marrow-save")) continue;
-      const btn = el("button", { class: "marrow-save marrow-round", title: TITLE, "aria-label": "Save to Marrow" }, [icon(20)]);
+      const btn = el("button", { class: "marrow-save marrow-round", title: TITLE, "aria-label": "Save to Marrow" }, [glyph()]);
       bar.appendChild(el("div", { class: "marrow-wrap" }, [btn]));
       wire(btn, () => {
         const link = art.querySelector('a[href*="/status/"] time')?.closest("a")?.href || location.href;
@@ -125,7 +139,7 @@
     for (const post of document.querySelectorAll(".feed-shared-update-v2, [data-urn^='urn:li:activity']")) {
       const bar = post.querySelector(".feed-shared-social-action-bar, .social-actions-bar, .feed-shared-social-actions");
       if (!bar || bar.querySelector(".marrow-save")) continue;
-      const btn = el("button", { class: "marrow-save marrow-li", title: TITLE, "aria-label": "Save to Marrow" }, [icon(20), el("span", { text: "Marrow" })]);
+      const btn = el("button", { class: "marrow-save marrow-li", title: TITLE, "aria-label": "Save to Marrow" }, [glyph(), el("span", { text: "Marrow" })]);
       bar.appendChild(btn);
       wire(btn, () => {
         const urn = post.getAttribute("data-urn") || post.querySelector("[data-urn]")?.getAttribute("data-urn") || "";

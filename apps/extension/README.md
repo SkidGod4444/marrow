@@ -3,8 +3,9 @@
 A private extension for Marrow users. Install it, paste an API key, done.
 
 **What it does.** A *Save to Marrow* button appears on the page itself — in the YouTube player's control bar, and in the
-action row of every X and LinkedIn post. Click saves to the namespace you used last; right-click opens *Save to* with a namespace dropdown; a small toast
-confirms with an *Open in Marrow* link. (The toolbar popup does the same for the current tab and shows a `+` badge.) Videos go to `POST /ingest`. Posts are read from the page you have open
+action row of every X and LinkedIn post. A click opens *Save to* with a namespace dropdown (your last choice preselected) and a Save key; a small toast
+confirms with an *Open in Marrow* link. The button is a vector glyph of the mark in `currentColor`, drawn in the same
+24×24 box as YouTube's own icons so the player centres and sizes it like a native control. (The toolbar popup does the same for the current tab and shows a `+` badge.) Videos go to `POST /ingest`. Posts are read from the page you have open
 (text + author — your own browser, your own session, one post at a click) and go to `POST /capture` with that text, which
 is the only way social links enter Marrow: the server never fetches X or LinkedIn.
 
