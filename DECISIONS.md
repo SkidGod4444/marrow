@@ -186,3 +186,7 @@ Expressions carry the sentence they were said in (`context`, stored on the revie
 ## 2026-08-28 — "Review" is called Practice, and only appears when it applies
 
 The owner couldn't tell what the Review page was for. The nav entry is now **Practice** ("flashcards for the expressions you marked Learn"), the page opens with a one-sentence explanation of the 2/7/30-day spacing, and the entry is hidden until a namespace is in language mode or something has been saved — a research-only user never sees it. Route stays `/review`; PRD wording ("review queue") stays in code and API names. (PRD §6.3)
+
+## 2026-08-28 — Full app review pass
+
+Inbox: the header separates "ingesting" from "failed"; failed cards can be skipped (archived) and unskipped like anything else, so a dead link doesn't stay red forever. Dates people read (inbox, item header, shared page, source card, graph panel, subscriptions) use `fmtDay` ("28 Aug"); ISO stays in exports and metadata. Library rows no longer print "ready" where a duration would be for text items. Everything else (transcript rail, chat, graph, practice, shared page, phone layouts) held up against the checklist; 50 E2E tests cover the changes.

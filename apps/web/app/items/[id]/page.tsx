@@ -6,7 +6,7 @@ import { AutoRefresh } from "@/components/marrow/auto-refresh";
 import { ItemView } from "@/components/marrow/item-view";
 import { api } from "@/lib/api";
 import { isWebUrl, kindLabel } from "@/lib/kind";
-import { fmtTs } from "@/lib/time";
+import { fmtDay, fmtTs } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
           {doc.source_type !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(doc.source_type)}</span>}
           {doc.author && <span>{doc.author}</span>}
           {doc.channel && doc.channel !== doc.author && <span>{doc.channel}</span>}
-          {doc.published_at && <span>{doc.published_at.slice(0, 10)}</span>}
+          {doc.published_at && <span>{fmtDay(doc.published_at)}</span>}
           {doc.duration_s ? <span>{fmtTs(doc.duration_s)}</span> : null}
           {doc.language && <span className="uppercase">{doc.language}</span>}
           {doc.frames.length > 0 && <span>{doc.frames.length} keyframes</span>}

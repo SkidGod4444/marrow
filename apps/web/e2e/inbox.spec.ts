@@ -27,7 +27,7 @@ test.describe("inbox (PRD §6.4)", () => {
 
   test("skip hides an item with an undo toast; Show skipped brings it back", async ({ page }) => {
     await page.goto("/");
-    const entry = page.locator("li").filter({ has: page.getByRole("button", { name: "Skip" }) }).first();
+    const entry = page.locator("li").filter({ has: page.getByRole("link", { name: "Read" }) }).filter({ has: page.getByRole("button", { name: "Skip" }) }).first();
     const title = (await entry.getByRole("heading", { level: 2 }).textContent())?.trim() ?? "";
     expect(title.length).toBeGreaterThan(0);
     await entry.getByRole("button", { name: "Skip" }).click();

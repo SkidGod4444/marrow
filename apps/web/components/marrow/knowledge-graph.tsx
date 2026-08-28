@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { kindLabel } from "@/lib/kind";
-import { fmtDate, fmtTs } from "@/lib/time";
+import { fmtDay, fmtTs } from "@/lib/time";
 
 // Knowledge graph of a namespace: item nodes (squares) and entity nodes (circles, coloured by kind, sized by
 // mentions) joined by mention edges. Three layouts (force / radial by kind / bipartite columns), filters (kind,
@@ -413,7 +413,7 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
           <label className="flex items-center gap-2">
             <span>through</span>
             <Slider value={[through]} min={1} max={timeline.length} step={1} onValueChange={(v) => setThrough(Array.isArray(v) ? (v[0] ?? 1) : (v as number))} className="w-28" aria-label="Show items published through" />
-            <span className="text-foreground">{timeline[through - 1]?.published_at ? fmtDate(timeline[through - 1]!.published_at!) : `${through}/${timeline.length}`}</span>
+            <span className="text-foreground">{timeline[through - 1]?.published_at ? fmtDay(timeline[through - 1]!.published_at!) : `${through}/${timeline.length}`}</span>
           </label>
         )}
         <button type="button" aria-pressed={contestedOnly} onClick={() => setContestedOnly((v) => !v)} className={`cursor-pointer rounded-md border px-2 py-0.5 uppercase tracking-wide transition-colors ${contestedOnly ? "border-time/60 text-time" : "border-border/70 hover:text-foreground"}`}>
@@ -756,7 +756,7 @@ function NodePanel({ node, links, namespace, onSelect, pinned, onUnpin }: { node
         <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">{node.label}</h2>
         {node.type === "item" ? (
           <p className="font-mono text-xs text-muted-foreground">
-            {[node.channel, node.published_at ? fmtDate(node.published_at) : null, node.duration_s ? fmtTs(node.duration_s) : null].filter(Boolean).join(" · ")}
+            {[node.channel, node.published_at ? fmtDay(node.published_at) : null, node.duration_s ? fmtTs(node.duration_s) : null].filter(Boolean).join(" · ")}
           </p>
         ) : (
           <p className="font-mono text-xs text-muted-foreground">

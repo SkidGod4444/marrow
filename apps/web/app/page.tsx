@@ -20,6 +20,8 @@ export default async function InboxPage({ searchParams }: PageProps<"/">) {
     api.inbox(ns, showSkipped).catch(() => ({ entries: [], pending: [] })),
   ]);
   const firstRun = namespaces.reduce((n, x) => n + x.itemCount, 0) === 0;
+  const failed = inbox.pending.filter((p) => p.status === "failed").length;
+  const running = inbox.pending.length - failed;
   const query = (extra: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries({
@@ -42,7 +44,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/">) {
           <p className="mt-1 font-mono text-xs text-muted-foreground">
             {firstRun
               ? "nothing yet"
-              : `${inbox.entries.length} to watch${inbox.pending.length ? ` · ${inbox.pending.length} ingesting` : ""}`}
+              : [`${inbox.entries.length} to watch`, running ? `${running} ingesting` : null, failed ? `${failed} failed` : null].filter(Boolean).join(" · ")}
           </p>
         </div>
         {!firstRun && (

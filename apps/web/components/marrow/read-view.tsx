@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { PresentedDocument } from "@/lib/api";
 import { isTextKind, isWebUrl } from "@/lib/kind";
-import { fmtDate, fmtTs } from "@/lib/time";
+import { fmtDay, fmtTs } from "@/lib/time";
 import { Markdown } from "./markdown";
 import { PlayerFrame, PlayerProvider, youtubeId } from "./player";
 import { Reader } from "./reader";
@@ -81,7 +81,7 @@ export function ReadView({ doc }: { doc: PresentedDocument }) {
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{[...new Set([doc.author, doc.channel].filter(Boolean))].join(" · ") || "Shared from Marrow"}</p>
           <h1 className="reading text-[30px] font-semibold leading-[1.15] tracking-[-0.01em] sm:text-[34px]">{doc.title}</h1>
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
-            {doc.published_at && <span>{fmtDate(doc.published_at)}</span>}
+            {doc.published_at && <span>{fmtDay(doc.published_at)}</span>}
             {doc.duration_s ? <span>{fmtTs(doc.duration_s)}</span> : null}
             {isWebUrl(doc.source_url) && (
               <a href={doc.source_url} target="_blank" rel="noreferrer" className="hover:text-foreground">

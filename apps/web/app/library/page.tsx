@@ -77,7 +77,7 @@ export default async function LibraryPage() {
                       <span className="reading min-w-0 flex-1 truncate text-[16px]">{item.title || item.sourceUrl}</span>
                       {item.sourceType !== "youtube_video" && <span className="hidden rounded-md border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">{kindLabel(item.sourceType)}</span>}
                       <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground sm:block">{item.channel}</span>
-                      <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.status === "ready" && item.durationS ? fmtTs(item.durationS) : st.label}</span>
+                      <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.status === "ready" ? (item.durationS ? fmtTs(item.durationS) : "") : st.label}</span>
                     </>
                   );
                   return (

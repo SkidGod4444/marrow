@@ -10,7 +10,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kindLabel } from "@/lib/kind";
-import { fmtDate, fmtTs } from "@/lib/time";
+import { fmtDay, fmtTs } from "@/lib/time";
 
 const STAGE_LABEL: Record<string, string> = {
   fetch: "Fetching",
@@ -97,10 +97,23 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
               </div>
               <div className="flex items-start gap-2 sm:flex-col sm:items-stretch">
                 {p.status === "failed" ? (
-                  <Button variant="outline" size="sm" disabled={busy === p.id} onClick={() => void retry(p)}>
-                    <RotateCcw />
-                    Retry
-                  </Button>
+                  <>
+                    <Button variant="outline" size="sm" disabled={busy === p.id} onClick={() => void retry(p)}>
+                      <RotateCcw />
+                      Retry
+                    </Button>
+                    {p.archivedAt ? (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => void archive(p.id, false)}>
+                        <Undo2 />
+                        Unskip
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => void skip(p.id)} title="Hide this one">
+                        <X />
+                        Skip
+                      </Button>
+                    )}
+                  </>
                 ) : (
                   <span className="inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
                     <span className="size-1.5 animate-pulse rounded-full bg-time" aria-hidden />
@@ -119,7 +132,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 {e.sourceType !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(e.sourceType)}</span>}
                 {e.channel && <span>{e.channel}</span>}
                 {e.durationS ? <span>{fmtTs(e.durationS)}</span> : null}
-                <span>{fmtDate(e.createdAt)}</span>
+                <span>{fmtDay(e.createdAt)}</span>
               </p>
               <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">
                 <Link href={`/items/${e.id}`} className="hover:underline">

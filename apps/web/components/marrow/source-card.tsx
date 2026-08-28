@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { PresentedDocument } from "@/lib/api";
 import { isWebUrl, kindLabel } from "@/lib/kind";
-import { fmtDate } from "@/lib/time";
+import { fmtDay } from "@/lib/time";
 import { Description } from "./description";
 import { Eyebrow } from "./timestamp-link";
 
@@ -51,7 +51,7 @@ export function SourceCard({ doc }: { doc: PresentedDocument }) {
           {doc.published_at && (
             <>
               <dt className="text-muted-foreground">published</dt>
-              <dd>{fmtDate(doc.published_at)}</dd>
+              <dd>{fmtDay(doc.published_at)}</dd>
             </>
           )}
           <dt className="text-muted-foreground">length</dt>
