@@ -4,7 +4,20 @@ import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
 import {
   type Config, type Db, type Storage, createCapture, createIngest, createNamespace, fakeEmbedding, fakeListing, fakePage, fakeProviders, getNamespace, listNamespaces, parseFeed, runJob, setItemMetadata,
 } from "@marrow/core";
+import type { Auth } from "./auth.ts";
 import type { ServerDeps } from "./deps.ts";
+
+export const FAKE_OWNER = { email: "owner@marrow.local", password: "marrow-owner", name: "Owner" };
+
+/** The owner account the E2E suite signs in with. */
+export async function seedFakeOwner(auth: Auth, log: (m: string) => void): Promise<void> {
+  try {
+    await auth.api.signUpEmail({ body: FAKE_OWNER });
+    log(`owner account ${FAKE_OWNER.email} / ${FAKE_OWNER.password}`);
+  } catch {
+    log("owner account already present");
+  }
+}
 
 const FEED = `<?xml version="1.0"?><rss version="2.0"><channel><title>Robot Talk</title><link>https://robottalk.example.com</link>
 <item><title>Ep 4: Contact models</title><link>https://robottalk.example.com/ep4</link><guid>ep4</guid><pubDate>Mon, 09 Mar 2026 10:00:00 GMT</pubDate><enclosure url="https://cdn.example.com/ep4.mp3" type="audio/mpeg"/></item>

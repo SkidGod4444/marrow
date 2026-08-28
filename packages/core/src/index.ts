@@ -32,6 +32,7 @@ export * from "./services/summary.ts";
 export * from "./services/inbox.ts";
 export * from "./services/capture.ts";
 export * from "./services/language.ts";
+export * from "./services/owner.ts";
 export { locateSpan } from "./pipeline/stages/language.ts";
 export * from "./services/email.ts";
 export { fetchPage, htmlToContent, htmlFragmentToMarkdown, isSocialUrl, looksLikePaper, normalizeCaptureUrl, assertPublicHttpUrl, type PageContent } from "./capture/page.ts";

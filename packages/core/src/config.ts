@@ -97,6 +97,11 @@ export const ConfigSchema = z.object({
   // Server
   PORT: z.coerce.number().default(3001),
   MARROW_API_KEY: z.string().optional(),
+  // Owner login (Better Auth, docs/DEPLOY.md): the browser-facing origin of the web app (cookies + CSRF) and the
+  // signing secret. Sign-up closes after the first account. MARROW_AUTH=off removes the web gate (local dev only).
+  MARROW_WEB_URL: z.string().default("http://localhost:3000"),
+  BETTER_AUTH_SECRET: z.string().optional(),
+  MARROW_AUTH: z.enum(["on", "off"]).default("on"),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -15,6 +15,10 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 
 All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
 
+## Owner login
+
+The web app is private. On first open you create the owner account (email + password); after that nobody else can sign up. Set `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` on the server (see `docs/DEPLOY.md`); `MARROW_AUTH=off` removes the gate for local development. MCP and the CLI are unaffected — they use the API key.
+
 ## Quick start (local, no Docker)
 
 ```bash

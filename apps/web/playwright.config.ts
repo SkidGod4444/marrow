@@ -15,13 +15,14 @@ const KEY = "e2e-key";
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: { timeout: 10_000 },
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
-  use: { baseURL: `http://localhost:${WEB}`, trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" },
+  use: { baseURL: `http://localhost:${WEB}`, storageState: "e2e/.auth/owner.json", trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1366, height: 900 } }, testIgnore: /mobile\.spec\.ts/ },
     { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/ },
@@ -43,6 +44,7 @@ export default defineConfig({
         POLL_EVERY_MINUTES: "0",
         MARROW_API_KEY: KEY,
         OPENAI_API_KEY: "test",
+        MARROW_WEB_URL: `http://localhost:${WEB}`,
       },
     },
     {

@@ -1,4 +1,5 @@
 import { API_URL, apiHeaders } from "@/lib/api";
+import { AUTH_ENABLED, getSession } from "@/lib/auth";
 
 // Transparent proxy to the Marrow API for client components (chat stream, frame images, ingest).
 // Attaches the owner API key server-side and streams the upstream body through untouched.
@@ -14,6 +15,8 @@ async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): 
   const { path } = await ctx.params;
   const target = path.join("/");
   if (!ALLOW.test(target)) return Response.json({ error: "not proxied" }, { status: 404 });
+  // The key is injected only for the signed-in owner — otherwise anyone with the URL could drive the API.
+  if (AUTH_ENABLED && !(await getSession())) return Response.json({ error: "sign in first" }, { status: 401 });
   const url = new URL(req.url);
   const upstream = await fetch(`${API_URL}/${target}${url.search}`, {
     method: req.method,

@@ -185,7 +185,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
         {mode === "link" && <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube video, article, paper or feed URL" className="w-72" aria-label="URL" />}
         {mode === "link" && (
           <Button type="submit" disabled={busy || !canSubmit}>
-            {busy ? "Adding…" : "Add"}
+            {busy ? "Adding…" : namespace ? `Add to ${namespace}` : "Add"}
           </Button>
         )}
       </div>
@@ -195,7 +195,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
           <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a post, thread, or newsletter text…" rows={5} aria-label="Text to capture" className="reading text-[15px]" />
           <div className="flex justify-end">
             <Button type="submit" disabled={busy || !canSubmit}>
-              {busy ? "Capturing…" : "Capture"}
+              {busy ? "Capturing…" : namespace ? `Capture to ${namespace}` : "Capture"}
             </Button>
           </div>
         </div>

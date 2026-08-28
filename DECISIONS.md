@@ -190,3 +190,7 @@ The owner couldn't tell what the Review page was for. The nav entry is now **Pra
 ## 2026-08-28 — Full app review pass
 
 Inbox: the header separates "ingesting" from "failed"; failed cards can be skipped (archived) and unskipped like anything else, so a dead link doesn't stay red forever. Dates people read (inbox, item header, shared page, source card, graph panel, subscriptions) use `fmtDay` ("28 Aug"); ISO stays in exports and metadata. Library rows no longer print "ready" where a duration would be for text items. Everything else (transcript rail, chat, graph, practice, shared page, phone layouts) held up against the checklist; 50 E2E tests cover the changes.
+
+## 2026-08-28 — Owner login with Better Auth
+
+Until now the web app injected the API key for every visitor, so the Vercel URL was effectively public. Better Auth (email + password) now runs **inside the API server** on the same Postgres — keeping "the web app never touches the database" — and the web app proxies `/api/auth/*`, so cookies stay first-party on the web app's origin (`baseURL` = `MARROW_WEB_URL`). Single owner: the first sign-up creates the account, `databaseHooks.user.create.before` refuses any later one. Pages are gated in Next's `proxy.ts` (cookie presence) and verified in the `(app)` layout and the API proxy (server-side `get-session`). No social providers, no e-mail sending, no password reset (delete the `auth_user` row to recreate). MCP/CLI keep the API key. (PRD §2 single owner, §8 auth)

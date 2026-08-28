@@ -129,6 +129,17 @@ FORCE=1 ./scripts/deploy-ec2.sh                  # rebuild even when nothing cha
 
 Only server-side changes matter to the box; a web-only commit rebuilds in a minute or two and restarts the same code. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR on GitHub.
 
+## Owner login
+
+The web app is private: the first person to open it creates the owner account (email + password), and sign-up closes for good after that — so do it right after the first deploy. Two variables on the **server** (`.env` on the box, then `FORCE=1 ./scripts/deploy-ec2.sh`):
+
+```
+MARROW_WEB_URL=https://try-marrow.vercel.app      # exactly the address you open the web app at
+BETTER_AUTH_SECRET=<openssl rand -hex 32>
+```
+
+Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. MCP and the CLI keep using `MARROW_API_KEY`. Forgot the password? There is no reset e-mail in a single-owner tool — delete the row in `auth_user` on RDS and open the web app again to recreate the account.
+
 ## Database migrations
 
 The server applies pending Drizzle migrations (`packages/core/src/db/migrations/`) at boot, before it starts serving — a deploy that adds a table (e.g. `0003_expression_reviews`, `0004_review_context`) needs nothing from you. If a boot ever fails on a migration, the log names it; the previous container keeps running until the new one is healthy (`scripts/deploy-ec2.sh` waits for `/health`).

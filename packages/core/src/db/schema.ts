@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  customType, doublePrecision, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, vector,
+  boolean, customType, doublePrecision, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, vector,
 } from "drizzle-orm/pg-core";
 import type { Novelty, StageName } from "../document.ts";
 
@@ -169,6 +169,63 @@ export const expressionReviews = pgTable(
   (t) => [uniqueIndex("expression_reviews_item_n_uq").on(t.itemId, t.n), index("expression_reviews_due_idx").on(t.dueAt)],
 );
 export type ExpressionReview = typeof expressionReviews.$inferSelect;
+
+// ---- Owner login (Better Auth, default model shape; snake_case columns) ----
+export const authUsers = pgTable("auth_user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const authSessions = pgTable(
+  "auth_session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("auth_session_user_idx").on(t.userId)],
+);
+export const authAccounts = pgTable(
+  "auth_account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    issuer: text("issuer"), // Better Auth ≥ 1.7: OIDC issuer for social providers; null for email + password
+    userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("auth_account_user_idx").on(t.userId)],
+);
+export const authVerifications = pgTable(
+  "auth_verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("auth_verification_identifier_idx").on(t.identifier)],
+);
 
 export const events = pgTable("events", {
   id: text("id").primaryKey(),

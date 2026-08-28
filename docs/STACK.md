@@ -33,6 +33,7 @@ Status: **RESOLVED 2026-08-27** (owner answers: TypeScript on bun · AWS for inf
 | Reranker | **RRF score fusion** by default; optional Luna rerank behind a flag. |
 | MCP SDK | `@modelcontextprotocol/sdk` (stdio + `InMemoryTransport` for tests) with **`@hono/mcp`** `StreamableHTTPTransport` mounted at `/mcp` on the same Hono app, stateless mode. |
 | OpenAI client | Official `openai` SDK in the pipeline (transcription needs `verbose_json` word output). Vercel AI SDK only in the web app for streaming chat. |
+| Owner login | **Better Auth 1.7** (`better-auth`) running inside the Hono server on the same Postgres (Drizzle adapter, tables `auth_*`), email + password, sign-up closed after the first account; the Next.js app proxies `/api/auth/*`, gates pages in `proxy.ts` + the `(app)` layout, and its `/api/marrow` proxy injects the API key only for a verified session. MCP/CLI keep the API key. |
 | Language mode (PRD §6.3) | Expressions via `gpt-5.6-luna` (structured output, line timestamps) → exact spans from whisper word timestamps → **ffmpeg AAC clips** (`clips/{item}/{n}.m4a`, ±0.15 s); review queue in Postgres (`expression_reviews`, 2 d / 7 d / 30 d). No extra services. |
 | End-to-end tests | **Playwright** (Chromium; a Pixel-7 project for phones) + **axe-core** (WCAG 2.x A/AA incl. colour contrast) against the app in `MARROW_FAKE=1` mode — no network in CI. |
 | Capture / feeds | `@mozilla/readability` + `linkedom` (article extraction), `turndown` (HTML → markdown), `unpdf` (PDF text), `fast-xml-parser` (RSS/Atom) — all pure JS, no headless browser. |

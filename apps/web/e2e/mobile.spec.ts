@@ -26,7 +26,7 @@ test.describe("mobile", () => {
     await page.getByRole("tab", { name: "text" }).click();
     await expect(page.getByRole("textbox", { name: "Text to capture" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    const box = await page.getByRole("button", { name: "Capture" }).boundingBox();
+    const box = await page.getByRole("button", { name: /^capture( to .+)?$/i }).boundingBox();
     expect(box && box.height >= 24).toBeTruthy();
   });
 

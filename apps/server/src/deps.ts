@@ -1,4 +1,5 @@
 import type { LanguageModel } from "ai";
+import type { Auth } from "./auth.ts";
 import {
   type Config, type Db, type Feed, type JobQueue, type PageContent, type PlaylistListing, type PollDeps, type SourceKind, type Storage, type SummaryDeps, RERANK_SYSTEM, RerankSchema, UsageTracker,
   embedTexts, fetchFeed, fetchPage, generateStructured, listPlaylistEntries, search, type SearchInput,
@@ -22,6 +23,8 @@ export type ServerDeps = {
   fetchPage: (url: string) => Promise<PageContent>;
   /** RSS/Atom feed for subscription polling. */
   fetchFeed: (url: string) => Promise<Feed>;
+  /** Owner login (Better Auth); optional so unit tests that don't touch auth can omit it. */
+  auth?: Auth;
 };
 
 /** Everything `pollSource`/`pollAllSources` need, from the server deps. */

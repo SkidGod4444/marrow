@@ -3,10 +3,7 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
 import {
-  SOURCE_TYPES, type CaptureInput, type SourceKind, addSource, archiveItem, audioKey, captureEmail, createCapture, createIngest, createNamespace, exportItemMarkdown, exportItemText,
-  exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources,
-  logEvent, lookupEntity, normalizeInboundEmail, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
-  answerReview, clipKey, listExpressions, reviewQueue, reviewSummary, saveExpression, unsaveExpression, updateNamespaceFlags,
+  addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, hasOwner, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type SourceKind, unsaveExpression, updateNamespaceFlags,
 } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
@@ -23,12 +20,20 @@ export function createApp(deps: AppDeps) {
   // The inbound-email webhook authenticates with its own token in the path (mail providers can't send our header).
   app.use("*", async (c, next) => {
     const key = deps.config.MARROW_API_KEY;
-    if (key && !c.req.path.startsWith("/inbound/email/")) {
+    const open = c.req.path.startsWith("/inbound/email/") || c.req.path.startsWith("/api/auth/") || c.req.path === "/auth/status";
+    if (key && !open) {
       const got = c.req.header("x-api-key") ?? c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
       if (got !== key) return c.json({ error: "unauthorized" }, 401);
     }
     await next();
   });
+
+  // ---- Owner login (Better Auth) — proxied by the web app; public by design, sign-up closes after the first account ----
+  if (deps.auth) {
+    const auth = deps.auth;
+    app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
+  app.get("/auth/status", async (c) => c.json({ enabled: Boolean(deps.auth) && deps.config.MARROW_AUTH === "on", has_owner: deps.auth ? await hasOwner(deps.db) : false }));
 
   // ---- MCP (Streamable HTTP, stateless) ----
   const mcp = createMcpServer(deps);

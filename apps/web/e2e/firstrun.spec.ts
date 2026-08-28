@@ -17,7 +17,7 @@ test.describe("first run", () => {
     await expect(page.getByRole("heading", { name: /turn a video into something/i })).toBeVisible();
     await expect(page.getByText("Show skipped")).toHaveCount(0);
     await page.getByRole("textbox", { name: "URL" }).fill("https://www.youtube.com/watch?v=my-first-video");
-    const add = page.getByRole("button", { name: "Add" });
+    const add = page.getByRole("button", { name: /^add( to .+)?$/i });
     await expect(add).toBeEnabled();
     await add.click();
     const dialog = page.getByRole("dialog");

@@ -14,7 +14,7 @@ test.describe("library: namespaces, adding, following", () => {
   test("adds a YouTube link → queued → appears in the inbox once ingested", async ({ page }) => {
     await page.goto("/library");
     await page.getByRole("textbox", { name: "URL" }).fill(`https://www.youtube.com/watch?v=new-video-from-e2e-${RUN}`);
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: /^add( to .+)?$/i }).click();
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { level: 2, name: new RegExp(`new video from e2e ${RUN}`, "i") })).toBeVisible({ timeout: 30_000 });
@@ -23,14 +23,14 @@ test.describe("library: namespaces, adding, following", () => {
   test("adds the same link again → Already in the library", async ({ page }) => {
     await page.goto("/library");
     await page.getByRole("textbox", { name: "URL" }).fill(`https://youtu.be/new-video-from-e2e-${RUN}`);
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: /^add( to .+)?$/i }).click();
     await expect(page.getByText("Already in the library")).toBeVisible();
   });
 
   test("captures an article URL and pasted text", async ({ page }) => {
     await page.goto("/library");
     await page.getByRole("textbox", { name: "URL" }).fill(`https://blog.example.com/posts/an-article-from-e2e-${RUN}`);
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: /^add( to .+)?$/i }).click();
     await expect(page.getByText("Captured", { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { level: 2, name: new RegExp(`an article from e2e ${RUN}`, "i") })).toBeVisible({ timeout: 30_000 });
@@ -39,7 +39,7 @@ test.describe("library: namespaces, adding, following", () => {
     await page.getByRole("tab", { name: "text" }).click();
     await page.getByRole("textbox", { name: "Title" }).fill(`Pasted note from e2e ${RUN}`);
     await page.getByRole("textbox", { name: "Text to capture" }).fill(`Backlash compensation matters for sim-to-real. This pasted note (${RUN}) is long enough to be captured as a post in the demo namespace.`);
-    await page.getByRole("button", { name: "Capture" }).click();
+    await page.getByRole("button", { name: /^capture( to .+)?$/i }).click();
     await expect(page.getByText("Captured", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: `Pasted note from e2e ${RUN}` })).toBeVisible({ timeout: 30_000 });
   });
@@ -47,7 +47,7 @@ test.describe("library: namespaces, adding, following", () => {
   test("social links need the text — plain-language error", async ({ page }) => {
     await page.goto("/library");
     await page.getByRole("textbox", { name: "URL" }).fill("https://x.com/someone/status/1");
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: /^add( to .+)?$/i }).click();
     await expect(page.getByText(/share the post text/i)).toBeVisible();
   });
 
