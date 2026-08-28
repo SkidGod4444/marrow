@@ -99,10 +99,10 @@ export function ReviewQueue({ due: initial, upcoming, total }: { due: ReviewCard
           <p className="mt-1 text-sm text-muted-foreground">
             {total === 0 ? (
               <>
-                Mark expressions with <b className="font-medium text-foreground">Learn</b> on an episode&apos;s Language tab and they come back here as recall prompts.
+                Press <b className="font-medium text-foreground">Learn</b> next to an expression on an episode&apos;s Language tab and it shows up here as a flashcard.
               </>
             ) : (
-              "Expressions come back 2 days after you save them, then 7, then 30."
+              "Cards come back 2 days after you save them, then 7, then 30."
             )}
           </p>
         </div>

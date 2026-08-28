@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReviewBadge } from "./review-badge";
+import { PracticeLink } from "./review-badge";
 
 const LINKS = [
   { href: "/", label: "Inbox" },
   { href: "/library", label: "Library" },
   { href: "/graph", label: "Graph" },
-  { href: "/review", label: "Review" },
 ];
 
 /** Primary nav with an explicit current-page state (Nielsen #1: visibility of system status). */
@@ -27,10 +26,10 @@ export function NavLinks() {
             className={`relative rounded-md px-2 py-1 transition-colors hover:text-foreground ${active ? "text-foreground after:absolute after:inset-x-2 after:-bottom-[13px] after:h-0.5 after:rounded-full after:bg-foreground" : "text-muted-foreground"}`}
           >
             {l.label}
-            {l.href === "/review" && <ReviewBadge />}
           </Link>
         );
       })}
+      <PracticeLink active={pathname.startsWith("/review")} />
     </nav>
   );
 }

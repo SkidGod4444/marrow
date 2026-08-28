@@ -182,3 +182,7 @@ The axe scan in the E2E suite now includes `color-contrast`. Tokens were re-tune
 ## 2026-08-28 — Language mode / review UX pass
 
 Expressions carry the sentence they were said in (`context`, stored on the review row too — migration 0004): recall works on a phrase in context, not a phrase alone. The Language tab shows the quote with the phrase highlighted (long lines windowed to ~160 chars), top-aligned controls, human dates ("next prompt 4 Sep" via `fmtDay`, UTC-deterministic), tooltips on Play/Learn, and a "Review →" shortcut once something is saved. The review card shows "card N of M" with a progress bar, a *Later* button (defers within the session, key L), the context quote on reveal, what each answer does to the schedule, and hides keyboard hints on phones.
+
+## 2026-08-28 — "Review" is called Practice, and only appears when it applies
+
+The owner couldn't tell what the Review page was for. The nav entry is now **Practice** ("flashcards for the expressions you marked Learn"), the page opens with a one-sentence explanation of the 2/7/30-day spacing, and the entry is hidden until a namespace is in language mode or something has been saved — a research-only user never sees it. Route stays `/review`; PRD wording ("review queue") stays in code and API names. (PRD §6.3)

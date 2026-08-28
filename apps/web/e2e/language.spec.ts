@@ -23,8 +23,8 @@ test.describe("language mode + review queue", () => {
     await expect(row.getByRole("button", { name: "Learning" })).toBeVisible();
     await expect(row.getByText(/in review · next/)).toBeVisible();
     // the review nav badge is only for due items (none yet); the Review page lists it as upcoming
-    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /^review/i }).click();
-    await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /^practice/i }).click();
+    await expect(page.getByRole("heading", { name: "Practice" })).toBeVisible();
     await expect(page.getByText(/nothing due right now/i)).toBeVisible();
     await expect(page.getByText("Coming up")).toBeVisible();
   });

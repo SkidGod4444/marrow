@@ -112,13 +112,13 @@ export function LanguagePack({ itemId, initial }: { itemId: string; initial: Exp
           </span>
           {saved > 0 && (
             <Link href="/review" className="inline-flex items-center gap-0.5 text-foreground hover:underline">
-              Review
+              Practice
               <ArrowRight className="size-3" />
             </Link>
           )}
         </p>
       </div>
-      <p className="reading text-[15px] text-muted-foreground">Idioms, phrasal verbs and turns of phrase from this episode, in the order they are said. Play the exact clip, jump to the moment, or mark one to learn — it comes back as a recall prompt.</p>
+      <p className="reading text-[15px] text-muted-foreground">Idioms, phrasal verbs and turns of phrase from this episode, in the order they are said. Play the exact clip, jump to the moment, or press Learn — it becomes a flashcard on the Practice page, back after 2, 7 and 30 days.</p>
       <ol className="divide-y divide-border/70 border-y border-border/70">
         {rows.map((r) => {
           const playing = clips.playing === r.n;

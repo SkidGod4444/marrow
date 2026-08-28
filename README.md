@@ -11,7 +11,7 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 - **Phase 3 — Web app** ✅ library → item page with Reader / Chat / Transcript, YouTube player that seeks on `[MM:SS]` citations, per-video chat (AI Elements + Vercel AI SDK) with `view_frame` / `web_search` / `fetch_url`, "What's on screen now", and a **knowledge graph** per namespace (`/namespaces/<name>/graph`, also `get_graph` over MCP/REST).
 - **Phase 4 — Namespaces at scale** ✅ playlist/channel subscriptions polled on a schedule, the watch inbox as the landing page (Read / Chat / Skip), novelty triage from the 6th item, namespace summaries every 3 ingests, namespace-level chat with the retrieval tools.
 - **Phase 5 — Capture + text sources** ✅ `POST /capture` (URL → readable text or PDF, or pasted text; social posts need the text), iOS/Android share sheet + bookmarklet (`docs/CAPTURE.md`), inbound-email webhook, RSS/podcast feeds through the same subscriptions, linked-video offers, Obsidian-ready markdown with front-matter.
-- **Phase 6 — Language mode + review queue** ✅ namespaces flagged `language_learning` mine idioms, phrasal verbs and slang from podcasts/videos with playable exact-span clips (word-timestamp aligned), a Language tab, and `/review` recall prompts on a 2 d / 7 d / 30 d schedule.
+- **Phase 6 — Language mode + review queue** ✅ namespaces flagged `language_learning` mine idioms, phrasal verbs and slang from podcasts/videos with playable exact-span clips (word-timestamp aligned), a Language tab, and a **Practice** page (`/review`) of flashcards on a 2 d / 7 d / 30 d schedule.
 
 All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
 
@@ -121,7 +121,7 @@ All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) whe
 | Apply migrations to `DATABASE_URL` | `bun run db:migrate` (the server and CLI also migrate on start) |
 | Run the server | `bun run server` (`server:dev` for watch mode) |
 | Run the web app | `bun run web` (needs `apps/web/.env.local`) · `bun run build` builds everything via Turborepo |
-| Language mode | Flag a namespace `language_learning` (library toggle or the new-namespace checkbox): podcasts and videos get a **Language** tab — idioms, phrasal verbs, collocations and slang with a playable clip of the exact span and a jump link; **Learn** puts one in the review queue (`/review`), which brings it back after 2 days, then 7, then 30. MCP: `list_expressions`, `save_expression`, `review_queue`, `answer_review`. |
+| Language mode | Flag a namespace `language_learning` (library toggle or the new-namespace checkbox): podcasts and videos get a **Language** tab — idioms, phrasal verbs, collocations and slang with a playable clip of the exact span and a jump link; **Learn** turns one into a flashcard on the **Practice** page (`/review`), which brings it back after 2 days, then 7, then 30. MCP: `list_expressions`, `save_expression`, `review_queue`, `answer_review`. |
 | Capture | `docs/CAPTURE.md` — `POST /capture`, iOS/Android share sheet, bookmarklet, inbound email webhook, RSS/podcast feeds, Obsidian export |
 | Deploy | `docs/DEPLOY.md` — web app on **Vercel** (root dir `apps/web`, push-to-deploy), server/API on **AWS** (EC2 + RDS + S3, `docker-compose.prod.yml` with Caddy); server self-deploys from `main` via `docker/marrow-deploy.timer` on the box |
 
