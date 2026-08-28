@@ -12,7 +12,7 @@ export const setState = (patch) => chrome.storage.local.set(patch);
 // ---- the API ----
 export async function api(settings, path, init = {}) {
   if (!settings.apiUrl || !settings.apiKey) throw new Error("set the server address and API key in Options first");
-  const headers = { "x-api-key": settings.apiKey, ...(settings.org ? { "x-marrow-org": settings.org } : {}), ...(init.headers || {}) };
+  const headers = { "x-api-key": settings.apiKey, ...(settings.org ? { "x-marrow-org": settings.org } : {}), ...init.headers };
   const res = await fetch(`${settings.apiUrl}${path}`, { ...init, headers, cache: "no-store" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `the server answered ${res.status}`);
