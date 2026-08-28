@@ -97,7 +97,7 @@ export function Chat({ endpoint, chatId, mode, seed, onSeedConsumed, className =
         </Suggestions>
       )}
 
-      <PromptInput onSubmit={onSubmit} className="m-2 border-border/70 shadow-none">
+      <PromptInput onSubmit={onSubmit} className="m-2 w-auto border-border/70 shadow-none">
         <PromptInputBody>
           <PromptInputTextarea value={input} onChange={(e) => setInput(e.currentTarget.value)} placeholder={mode === "item" ? "Ask about this video…" : "Ask across every video in this namespace…"} aria-label={mode === "item" ? "Ask about this video" : "Ask across this namespace"} />
         </PromptInputBody>
