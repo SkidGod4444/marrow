@@ -30,18 +30,19 @@
   const root = shell.attachShadow({ mode: "open" });
   root.appendChild(el("style", { text: `
     :host { all: initial; }
-    .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; max-width: 360px; padding: 10px 12px; border-radius: 8px; border: 1px solid #2D2D2D; background: #151515; color: #ececea; font: 13px/1.4 system-ui, -apple-system, sans-serif; box-shadow: 0 8px 30px rgba(0,0,0,.45); animation: in .18s ease-out; }
-    .toast img { width: 18px; height: 18px; border-radius: 4px; }
+    .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; max-width: 360px; padding: 10px 14px; border-radius: 12px; border: 1px solid #2D2D2D; background: #151515; color: #ececea; font: 13px/1.4 system-ui, -apple-system, sans-serif; box-shadow: 0 8px 30px rgba(0,0,0,.45); animation: in .18s ease-out; }
+    .toast img { width: 18px; height: 18px; border-radius: 5px; }
     .toast b { font-weight: 600; }
     .toast a { color: #ececea; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #4a4a4a; white-space: nowrap; margin-left: 4px; }
     .toast a:hover { text-decoration-color: #ececea; }
     .toast.bad { border-color: #7a2f2f; }
-    .menu { pointer-events: auto; position: fixed; min-width: 180px; padding: 6px; border-radius: 8px; border: 1px solid #2D2D2D; background: #151515; color: #ececea; box-shadow: 0 8px 30px rgba(0,0,0,.45); font: 12px system-ui, sans-serif; }
-    .menu p { margin: 4px 8px 6px; font: 10px ui-monospace, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: #9a9a96; }
-    .menu button { display: block; width: 100%; text-align: left; padding: 7px 8px; border: 0; border-radius: 6px; background: none; color: #ececea; font: 12.5px ui-monospace, Menlo, monospace; cursor: pointer; }
-    .menu button:hover { background: #20201F; }
-    .menu button.on::after { content: " ✓"; color: #9a9a96; }
-    .menu button:disabled { color: #9a9a96; cursor: default; }
+    .menu { pointer-events: auto; position: fixed; width: 280px; padding: 10px 12px 12px; border-radius: 12px; border: 1px solid #2D2D2D; background: #151515; color: #ececea; box-shadow: 0 8px 30px rgba(0,0,0,.45); font: 13px system-ui, sans-serif; animation: in .18s ease-out; }
+    .menu p { margin: 0 0 8px; font: 10px ui-monospace, Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; color: #9a9a96; }
+    .menu .row { display: flex; gap: 8px; align-items: center; }
+    .menu .select { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #2D2D2D; background: #20201F; color: #ececea; font: 12.5px ui-monospace, Menlo, monospace; box-shadow: inset 0 1px 0 rgba(0,0,0,.4); }
+    .menu .key { cursor: pointer; flex: none; height: 30px; padding: 0 14px; border-radius: 8px; border: 1px solid #9a9a96; border-bottom-width: 3px; background: linear-gradient(180deg, #f4f4f2, #dcdcda); color: #111; font: 500 12.5px system-ui, sans-serif; }
+    .menu .key:active { transform: translateY(2px); border-bottom-width: 1px; }
+    .menu .err { font-size: 12px; color: #9a9a96; }
     @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   ` }));
   document.documentElement.appendChild(shell);
@@ -54,15 +55,22 @@
     toastTimer = setTimeout(() => t.remove(), ms);
   }
   function closeMenu() { root.querySelector(".menu")?.remove(); }
+  /** "Save to [namespace ▾] [Save]" — a small popover next to the button. */
   async function menu(x, y, onPick) {
     closeMenu();
     const r = await send({ type: "namespaces" });
-    const m = el("div", { class: "menu", style: `left:${Math.min(x, innerWidth - 220)}px;top:${Math.min(y, innerHeight - 220)}px` });
-    m.appendChild(el("p", { text: r?.ok ? "save to" : "marrow" }));
-    if (!r?.ok) m.appendChild(el("button", { text: r?.error || "not connected", disabled: "" }));
-    else if (!r.namespaces.length) m.appendChild(el("button", { text: "no namespaces yet", disabled: "" }));
-    else for (const n of r.namespaces) m.appendChild(el("button", { text: n.name, class: n.name === r.current ? "on" : "", onclick: () => { closeMenu(); onPick(n.name); } }));
+    const m = el("div", { class: "menu", style: `left:${Math.max(8, Math.min(x - 140, innerWidth - 296))}px;top:${y}px` });
+    m.addEventListener("click", (e) => e.stopPropagation());
+    m.appendChild(el("p", { text: "save to" }));
+    if (!r?.ok) m.appendChild(el("div", { class: "err", text: r?.error || "not connected" }));
+    else if (!r.namespaces.length) m.appendChild(el("div", { class: "err", text: "no namespaces yet — create one in Marrow" }));
+    else {
+      const sel = el("select", { class: "select", "aria-label": "Namespace" }, r.namespaces.map((n) => el("option", { value: n.name, text: n.name, ...(n.name === r.current ? { selected: "" } : {}) })));
+      const go = el("button", { class: "key", text: "Save", onclick: () => { closeMenu(); onPick(sel.value); } });
+      m.appendChild(el("div", { class: "row" }, [sel, go]));
+    }
     root.appendChild(m);
+    m.style.top = `${Math.max(8, y - m.offsetHeight - 14)}px`; // above the control it came from
     setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
   }
 

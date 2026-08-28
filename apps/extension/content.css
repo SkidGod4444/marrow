@@ -1,6 +1,6 @@
 /* The in-page "Save to Marrow" controls. Kept to the host sites' own control sizes. */
 .marrow-save { cursor: pointer; }
-.marrow-save img { width: 22px; height: 22px; border-radius: 5px; vertical-align: middle; opacity: .92; transition: transform .12s ease, opacity .12s ease; }
+.marrow-save img { width: 22px; height: 22px; border-radius: 6px; vertical-align: middle; opacity: .92; transition: transform .12s ease, opacity .12s ease; }
 .marrow-save:hover img { opacity: 1; transform: translateY(-1px); }
 .marrow-save.marrow-busy img { opacity: .5; }
 .marrow-save.marrow-saved img { box-shadow: 0 0 0 2px #7fbf8a; }
