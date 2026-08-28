@@ -12,7 +12,7 @@ Marrow ingests long-form video (YouTube first; later podcasts via RSS, uploads, 
 
 ## Repo state & build order
 
-Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1–6 are done** (verified with fakes/mocks; the live OpenAI acceptance runs still need `OPENAI_API_KEY`). Check `DECISIONS.md` and `git log` for what is in progress.
+Licence is AGPL-3.0 for now (PRD §15 says it is still an open question — don't change it without the owner). Phases (PRD §14) are gated by their own acceptance criteria; **1 → 2 → 3 are strictly ordered**, 4–6 may interleave after 3. **Phases 1–6 are done** (verified with fakes/mocks and, on 2026-08-28, live in production: a real YouTube ingest ran every stage for $0.09). Check `DECISIONS.md` and `git log` for what is in progress.
 
 1. **Phase 1 — Ingestion core.** CLI/endpoint ingests one YouTube URL into a namespace through pipeline stages 1–8. *Accept:* a 1-hr talk yields a valid document JSON with word-level timestamps, ≤120 captioned keyframes, article, references, segments in DB; re-running is idempotent; a failed stage resumes without redoing earlier ones.
 2. **Phase 2 — MCP + REST.** All §8 tools live; Claude Code connects via a config snippet documented in the README. *Accept:* `search` over a 10-video namespace returns timestamped deep-linked segments; `get_frame` returns an image; `lookup_entity` returns cross-video mentions.

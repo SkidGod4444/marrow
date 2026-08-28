@@ -80,7 +80,11 @@ MARROW_WEB_URL=https://marrow.yourdomain.com # the address people open the web a
 BETTER_AUTH_SECRET=<openssl rand -hex 32>    # signs login sessions; changing it signs everyone out once
 INBOUND_EMAIL_TOKEN=<openssl rand -hex 24>   # only if you wire inbound email (docs/CAPTURE.md §3)
 MARROW_API_DOMAIN=api.marrow.yourdomain.com
+INGEST_CONCURRENCY=2                         # jobs at once (2 on a t4g.small)
+YTDLP_COOKIES=/secrets/youtube-cookies.txt   # YouTube blocks cloud IPs — see "YouTube blocks the server" below
 ```
+
+Leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` out (or empty) when the instance has the IAM role from step 3 — an *empty* pair with no role is the classic silent failure: `/health` says `"storage":"error"` and every ingest fails with *Could not load credentials from any providers*.
 
 **How you know S3 is not set up:** `curl https://api…/health` shows `"storage":"error"`, the server log has `[storage] s3 check failed: Could not load credentials from any providers`, and every ingest lands in the inbox as *failed — Reason: Could not load credentials…* (the broker retries it twice first, so it sits on "Queued" for about a minute). Fix the credentials (below), then press **Retry** on the card.
 
@@ -223,5 +227,8 @@ The server applies pending Drizzle migrations (`packages/core/src/db/migrations/
 - **Stopped instances still bill for EBS**; a terminated instance loses its disk (the corpus lives in RDS + S3, so that is fine — `.env` is the only thing to back up).
 - **"no pg_hba.conf entry … no encryption"** means the client connected without TLS — RDS requires it. The app does this automatically; if you see it on an old image, add `?sslmode=require` to `DATABASE_URL` and rebuild.
 - **RDS "Public access: No"** is correct; the box reaches it privately via the security group rule in step 3.5. If the server logs `ECONNREFUSED`/timeouts to the DB, that rule is missing.
-- **YouTube may throttle yt-dlp from EC2 IPs.** If ingests fail at the fetch stage, run `bun run cli ingest …` from your Mac with the same `DATABASE_URL`/S3 settings — the pipeline is the same code and writes to the same place.
+- **YouTube blocks cloud IPs outright** ("Sign in to confirm you're not a bot") and its streams need yt-dlp's JS challenge solver. Both are handled — cookies file + Deno/Bun in the image — but the cookies are yours to export and refresh (see "YouTube blocks the server"). Emergency alternative: `bun run cli ingest …` from your Mac with the same `DATABASE_URL`/S3 settings — same code, home IP.
+- **An IAM role is invisible from inside Docker until the metadata hop limit is 2** (instance → *Modify instance metadata options*). Symptom: role attached, still `Could not load credentials`.
+- **1 GB is not enough.** A `t4g.micro` gets OOM-killed by its own image build; `t4g.small` + the 2 GB swap from step 5 is the floor.
+- **A job stuck on "Queued"** means the worker tried and hit something before the first stage — `/health` (`storage`, `queue`) and the inbox card's *Reason:* line say what; the raw text is in `docker compose logs server`.
 - When credits run out, the bill is the ~$40/mo above; nothing here needs a Savings Plan.

@@ -238,3 +238,7 @@ Even with cookies the box got "Requested format is not available": yt-dlp's verb
 ## 2026-08-28 — Instance size: `t4g.small` is the baseline
 
 Owner asked to upgrade the box from `t4g.micro` to `t4g.small`. Measured why: 1 GB with no swap was OOM-killed by the deploy's own image build, and the first real ingest (11 min of video) pushed ~260 MB into the 2 GB swap even after the fix. The launch guide now says `t4g.small` (the earlier "t4g.medium" was over-specified; the owner reasonably picked micro), step 5 adds the swap on every new box, and the resize is written as a console walkthrough with the Elastic-IP check first — the instance's role stays S3-only, so the box can't resize itself, and shouldn't. (docs/DEPLOY.md §3, §5, "The box")
+
+## 2026-08-28 — Production verified end to end
+
+After the day's fixes (S3 role + IMDS hop limit, YouTube cookies, JS runtime for yt-dlp, job recovery, 2 workers, `t4g.small` + swap) the live instance ingested a real 11-minute YouTube talk through every stage — fetch, transcribe ($0.065), keyframes, vision ($0.008), article ($0.003), references ($0.014), index — for **$0.09**, well inside the PRD's ≤ $1/hour target. `/health` on the API now answers the three questions that mattered today: which commit, can it store, is the queue moving. Docs (README, DEPLOY, STACK, CLAUDE.md) describe the setup as it actually runs. (PRD §5, §14)
