@@ -2,6 +2,7 @@
 
 import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { JobProgress } from "@marrow/core";
 import type { Me } from "./api";
 import { authClient } from "./auth-client";
 import { errorFor, fetchWithRetry, readJson } from "./http";
@@ -16,6 +17,7 @@ export const keys = {
   workspace: (orgId: string) => ["workspace", orgId] as const,
   apiKeys: (orgId: string) => ["api-keys", orgId] as const,
   expressions: (itemId: string) => ["expressions", itemId] as const,
+  job: (jobId: string) => ["job", jobId] as const,
 };
 
 async function proxy<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -72,6 +74,17 @@ export function useArchiveMutation() {
 export function useIngestMutation() {
   return useMutation({
     mutationFn: (input: { namespace: string; url: string; force?: boolean }) => proxy<{ job_id: string; item_id: string; reused: boolean }>("ingest", { method: "POST", body: JSON.stringify(input) }),
+  });
+}
+
+// ---- Ingest progress: poll a job while it is in flight ----
+export function useJobProgress(jobId: string, active: boolean) {
+  return useQuery<JobProgress>({
+    queryKey: keys.job(jobId),
+    queryFn: () => proxy<{ timeline: JobProgress }>(`jobs/${jobId}`).then((r) => r.timeline),
+    enabled: active,
+    refetchInterval: active ? 2500 : false,
+    refetchOnWindowFocus: active,
   });
 }
 

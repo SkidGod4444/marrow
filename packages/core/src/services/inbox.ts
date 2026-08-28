@@ -1,11 +1,12 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { type Db, type Item, items, jobs, namespaces } from "../db/index.ts";
+import { type Db, type Item, items, namespaces } from "../db/index.ts";
+import { type JobProgress, jobProgress, latestJobsFor } from "./jobs.ts";
 import { logEvent } from "./events.ts";
 import { getNamespace } from "./namespaces.ts";
 
 // PRD §6.4 watch inbox: ready items you haven't skipped, newest first, with summary + novelty verdict.
 
-export type InboxEntry = Item & { namespace: { id: string; name: string }; job?: { id: string; stage: string | null; state: string; error: string | null } };
+export type InboxEntry = Item & { namespace: { id: string; name: string }; job?: JobProgress };
 
 export async function listInbox(db: Db, opts: { organizationId?: string; namespace?: string; includeArchived?: boolean; limit?: number } = {}): Promise<{ entries: InboxEntry[]; pending: InboxEntry[] }> {
   const ns = opts.namespace ? await getNamespace(db, opts.namespace, opts.organizationId) : null;
@@ -21,18 +22,11 @@ export async function listInbox(db: Db, opts: { organizationId?: string; namespa
   const all: InboxEntry[] = rows.map((r) => ({ ...r.item, namespace: r.ns }));
   const pending = all.filter((e) => e.status !== "ready");
   if (pending.length) {
-    // Latest job per pending item → current stage / error, so the UI can show progress and offer a retry.
-    const latest = await db
-      .select({ id: jobs.id, itemId: jobs.itemId, stage: jobs.stage, state: jobs.state, error: jobs.error })
-      .from(jobs)
-      .where(inArray(jobs.itemId, pending.map((p) => p.id)))
-      .orderBy(desc(jobs.createdAt));
-    const seen = new Set<string>();
-    for (const j of latest) {
-      if (seen.has(j.itemId)) continue;
-      seen.add(j.itemId);
-      const e = pending.find((p) => p.id === j.itemId);
-      if (e) e.job = { id: j.id, stage: j.stage, state: j.state, error: j.error };
+    // Latest job per pending item → step-by-step progress / error, so the UI can show what is happening and offer a retry.
+    const latest = await latestJobsFor(db, pending.map((p) => p.id));
+    for (const e of pending) {
+      const j = latest.get(e.id);
+      if (j) e.job = jobProgress(j);
     }
   }
   return { entries: all.filter((e) => e.status === "ready"), pending };

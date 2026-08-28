@@ -158,6 +158,7 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
     async transcribe(_path, usage) {
       hit("transcribe");
       if (topic.includes("broken")) throw new Error("simulated transcription failure");
+      if (topic.includes("slow")) await new Promise((r) => setTimeout(r, 8000)); // lets the UI show a job in flight
       usage.add("whisper-1", { audio_seconds: duration, requests: 1 });
       const segments: Array<{ start: number; end: number; text: string }> = [];
       const ws: Array<{ word: string; start: number; end: number }> = [];

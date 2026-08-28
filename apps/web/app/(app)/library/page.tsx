@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IngestProgress } from "@/components/marrow/ingest-progress";
 import { IngestForm } from "@/components/marrow/ingest-form";
 import { LanguageModeToggle } from "@/components/marrow/namespace-flags";
 import { Markdown } from "@/components/marrow/markdown";
@@ -77,7 +78,13 @@ export default async function LibraryPage() {
                       <span className="reading min-w-0 flex-1 truncate text-[16px]">{item.title || item.sourceUrl}</span>
                       {item.sourceType !== "youtube_video" && <span className="hidden rounded-md border border-border px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:block">{kindLabel(item.sourceType)}</span>}
                       <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground sm:block">{item.channel}</span>
-                      <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.status === "ready" ? (item.durationS ? fmtTs(item.durationS) : "") : st.label}</span>
+                      {item.status === "ready" ? (
+                        <span className="w-20 text-right font-mono text-xs text-muted-foreground">{item.durationS ? fmtTs(item.durationS) : ""}</span>
+                      ) : item.job && item.status !== "failed" ? (
+                        <IngestProgress job={item.job} sourceType={item.sourceType} durationS={item.durationS} compact />
+                      ) : (
+                        <span className="w-20 text-right font-mono text-xs text-muted-foreground">{st.label}</span>
+                      )}
                     </>
                   );
                   return (

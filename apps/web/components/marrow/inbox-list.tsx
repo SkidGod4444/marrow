@@ -6,26 +6,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kindLabel } from "@/lib/kind";
+import { stageLabel } from "@/lib/stages";
 import { useArchiveMutation, useIngestMutation } from "@/lib/queries";
+import { IngestProgress } from "./ingest-progress";
 import { useCan } from "./me-provider";
 import { fmtDay, fmtTs } from "@/lib/time";
-
-const STAGE_LABEL: Record<string, string> = {
-  fetch: "Fetching",
-  transcribe: "Transcribing",
-  diarize: "Finding speakers",
-  frames: "Picking keyframes",
-  vision: "Reading the slides",
-  article: "Writing the article",
-  enrich: "Resolving references",
-  segment: "Indexing",
-  language: "Extracting expressions",
-  novelty: "Checking what's new",
-};
 
 /** Inbox entries: title, summary, novelty verdict with "new" spans as deep links, and Read / Chat / Skip. */
 export function InboxList({ entries, pending, showNamespace }: { entries: InboxEntry[]; pending: InboxEntry[]; showNamespace: boolean }) {
@@ -77,7 +65,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
           <li key={p.id} className="py-5">
             <div
               className={`relative grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6 ${
-                p.status === "failed" ? "border-destructive/40 bg-destructive/5" : "border-time/30 bg-card shadow-[0_0_0_1px_color-mix(in_oklch,var(--time)_25%,transparent),0_12px_40px_-16px_color-mix(in_oklch,var(--time)_55%,transparent)]"
+                p.status === "failed" ? "border-destructive/40 bg-destructive/5" : "border-border/70 bg-card shadow-[0_14px_40px_-22px_rgb(0_0_0/0.8)]" // in flight: a lifted panel; red is for failure only
               }`}
             >
               <div className="min-w-0 space-y-2.5">
@@ -86,17 +74,13 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                   {p.sourceType !== "youtube_video" && <span className="rounded-md border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">{kindLabel(p.sourceType)}</span>}
                   {p.channel && <span>{p.channel}</span>}
                   {p.durationS ? <span>{fmtTs(p.durationS)}</span> : null}
-                  {p.status === "failed" ? (
-                    <span className="text-destructive">failed{p.job?.stage ? ` while ${(STAGE_LABEL[p.job.stage] ?? p.job.stage).toLowerCase()}` : ""}</span>
-                  ) : (
-                    <Shimmer as="span" className="text-[11px]" duration={1.6}>
-                      {p.status === "running" && p.job?.stage ? `${STAGE_LABEL[p.job.stage] ?? p.job.stage}…` : "Queued…"}
-                    </Shimmer>
-                  )}
+                  {p.status === "failed" && <span className="text-destructive">failed{p.job?.stage ? ` while ${stageLabel(p.job.stage).toLowerCase()}` : ""}</span>}
                 </p>
                 <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">{p.title || p.sourceUrl.replace(/^https?:\/\/(www\.)?/, "")}</h2>
                 {p.status === "failed" ? (
                   <p className="reading text-[15px] text-foreground/75">We couldn&apos;t finish this one. Retrying picks up where it stopped.</p>
+                ) : p.job ? (
+                  <IngestProgress job={p.job} sourceType={p.sourceType} durationS={p.durationS} />
                 ) : (
                   <div className="max-w-3xl space-y-2" aria-hidden>
                     <Skeleton className="h-3.5 w-11/12 bg-muted/70" />
@@ -125,12 +109,7 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                       </Button>
                     )}
                   </>
-                ) : (
-                  <span className="inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
-                    <span className="size-1.5 animate-pulse rounded-full bg-time" aria-hidden />
-                    ingesting
-                  </span>
-                )}
+                ) : null}
               </div>
             </div>
           </li>
