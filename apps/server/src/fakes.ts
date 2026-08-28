@@ -81,6 +81,11 @@ export async function seedFakeCorpus(deps: { db: Db; storage: Storage; config: C
   const pod = await createIngest(db, { namespace: ns.name, url: "https://cdn.example.com/robot-talk/ep3.mp3", sourceType: "podcast_episode" });
   await setItemMetadata(db, pod.item.id, { title: "Ep 3: Backlash, with a guest", channel: "Robot Talk", publishedAt: new Date("2026-03-02T10:00:00Z") });
   await runJob({ db, storage, config, providers, log: () => undefined }, pod.job.id);
+  // Language mode (PRD §6.3): a namespace flagged language_learning with a podcast → expressions + clips.
+  const english = await createNamespace(db, { name: "english", description: "Spoken English from podcasts", flags: { language_learning: true } });
+  const ep = await createIngest(db, { namespace: english.name, url: "https://cdn.example.com/robot-talk/ep4.mp3", sourceType: "podcast_episode" });
+  await setItemMetadata(db, ep.item.id, { title: "Ep 4: Contact models, with two guests", channel: "Robot Talk", publishedAt: new Date("2026-03-09T10:00:00Z") });
+  await runJob({ db, storage, config, providers, log: () => undefined }, ep.job.id);
   // A second namespace so switchers and the /graph picker have something to pick.
   const papers = await createNamespace(db, { name: "papers", description: "Reading list" });
   const p = await createCapture({ db, storage, fetchPage: async (u) => fakePage(u) }, { namespace: papers.name, url: "https://arxiv.org/abs/1703.06907" });

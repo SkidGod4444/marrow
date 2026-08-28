@@ -15,6 +15,14 @@ export async function createNamespace(db: Db, input: { name: string; description
 }
 
 /** Look up by id (`ns_…`) or by name. */
+/** Merge flags (e.g. `{ language_learning: true }`); returns null when the namespace doesn't exist. */
+export async function updateNamespaceFlags(db: Db, ref: string, flags: NamespaceFlags): Promise<Namespace | null> {
+  const ns = await getNamespace(db, ref);
+  if (!ns) return null;
+  const [row] = await db.update(namespaces).set({ flags: { ...ns.flags, ...flags } }).where(eq(namespaces.id, ns.id)).returning();
+  return row ?? null;
+}
+
 export async function getNamespace(db: Db, ref: string): Promise<Namespace | null> {
   const [row] = await db
     .select()

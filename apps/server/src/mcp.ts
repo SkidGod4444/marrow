@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  addSource, createCapture, createIngest, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, SOURCE_TYPES,
+  addSource, answerReview, createCapture, createIngest, dueReviews, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listExpressions, listInbox, listItems, listNamespaces, listSources, lookupEntity, pollAllSources, pollSource, presentDocument, reviewSummary, saveExpression, SOURCE_TYPES,
 } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 
@@ -237,6 +237,40 @@ export function createMcpServer(deps: ServerDeps): McpServer {
       } catch (err) {
         return fail((err as Error).message);
       }
+    },
+  );
+
+  // ---- Language mode + review queue (PRD §6.3) ----
+  server.registerTool(
+    "list_expressions",
+    { title: "Expressions to learn", description: "Language mode: the expressions (idioms, phrasal verbs, collocations, slang) mined from an item, each with meaning, exact time span, clip URL and deep link. Only items in namespaces flagged language_learning have them.", inputSchema: { item_id: z.string() } },
+    async ({ item_id }) => {
+      const r = await listExpressions({ db: deps.db, storage: deps.storage }, item_id);
+      return r ? text(r) : fail(`item ${item_id} not found`);
+    },
+  );
+  server.registerTool(
+    "save_expression",
+    { title: "Learn an expression", description: "Put an expression in the review queue: it comes back as a recall prompt after 2 days, then 7, then 30.", inputSchema: { item_id: z.string(), n: z.number().int().min(0).describe("Index from list_expressions") } },
+    async ({ item_id, n }) => {
+      try {
+        return text({ review: await saveExpression({ db: deps.db, storage: deps.storage }, item_id, n) });
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+  server.registerTool(
+    "review_queue",
+    { title: "Review queue", description: "Expressions due for recall now (oldest first) — quiz the owner: show the expression, ask for the meaning, then reveal the explanation and answer_review.", inputSchema: {} },
+    async () => text({ summary: await reviewSummary(deps.db), due: await dueReviews(deps.db) }),
+  );
+  server.registerTool(
+    "answer_review",
+    { title: "Answer a review", description: "Record the outcome of a recall prompt: got_it advances the interval (2d → 7d → 30d), again restarts at 2d.", inputSchema: { review_id: z.string(), result: z.enum(["got_it", "again"]) } },
+    async ({ review_id, result }) => {
+      const r = await answerReview(deps.db, review_id, result);
+      return r ? text({ review: r }) : fail(`review ${review_id} not found`);
     },
   );
 

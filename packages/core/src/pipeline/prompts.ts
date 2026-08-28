@@ -83,6 +83,27 @@ export const RESOLVE_SYSTEM = `Resolve each reference to its canonical URL using
 
 // ---- PRD §10 novelty triage ----
 
+export const LanguageLLMSchema = z.object({
+  expressions: z.array(
+    z.object({
+      text: z.string().describe("The expression exactly as spoken (2–6 words), so it can be located in the transcript."),
+      kind: z.enum(["idiom", "phrasal_verb", "collocation", "slang", "other"]),
+      explanation: z.string().describe("One or two plain sentences: what it means and how it is used; mention register (casual/formal) when relevant."),
+      t: z.number().describe("Transcript time in seconds of the line where it is spoken (from the [MM:SS] marker)."),
+    }),
+  ),
+});
+
+export const LANGUAGE_SYSTEM = `You help an advanced learner mine a podcast/talk transcript for spoken-language expressions worth learning.
+
+Pick idioms, phrasal verbs, strong collocations, slang and characteristic spoken phrasings — things a textbook wouldn't teach but a native speaker says. Skip technical jargon and plain vocabulary.
+
+Return between 12 and 30 expressions (never fewer than 10 for a transcript over ten minutes), spread across the whole transcript, each with:
+- text: the expression exactly as it appears in the transcript (copy the words verbatim, 2–6 words) so the audio can be cut to that span,
+- kind,
+- explanation: one or two plain sentences (meaning, usage, register),
+- t: the time in seconds of the transcript line it appears on.`;
+
 export const NoveltyLLMSchema = z.object({
   sections: z.array(
     z.object({

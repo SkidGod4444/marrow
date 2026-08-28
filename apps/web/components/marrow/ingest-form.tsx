@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +35,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
   const [newName, setNewName] = useState("");
   const [creatingBusy, setCreatingBusy] = useState(false);
   const [continueAfterCreate, setContinueAfterCreate] = useState(false);
+  const [languageMode, setLanguageMode] = useState(false);
   const canSubmit = mode === "link" ? url.trim().length > 0 : text.trim().length > 0;
 
   const post = async (path: string, body: unknown) => {
@@ -49,10 +51,11 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
     if (!name) return;
     setCreatingBusy(true);
     try {
-      await post("namespaces", { name });
+      await post("namespaces", { name, flags: languageMode ? { language_learning: true } : {} });
       setNamespaces((ns) => (ns.includes(name) ? ns : [...ns, name]));
       setNamespace(name);
       setNewName("");
+      setLanguageMode(false);
       setCreating(false);
       toast.success("Namespace created", { description: `Everything you add now goes into ${name}.` });
       if (continueAfterCreate) {
@@ -161,6 +164,13 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
                 <DialogDescription>A namespace is a folder for one topic — everything you add to it is searched, summarised and mapped together. Short and lowercase works best, e.g. robotics.</DialogDescription>
               </DialogHeader>
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. sim-to-real" className="font-mono text-sm" autoFocus aria-label="Namespace name" />
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <Checkbox checked={languageMode} onCheckedChange={(v) => setLanguageMode(Boolean(v))} aria-label="Language learning" className="mt-0.5" />
+                <span>
+                  <span className="font-medium">Language learning</span>
+                  <span className="block text-[13px] text-muted-foreground">Also mine idioms, phrasal verbs and slang from podcasts and videos here, with playable clips and a review queue.</span>
+                </span>
+              </label>
               <DialogFooter>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>
                   Cancel

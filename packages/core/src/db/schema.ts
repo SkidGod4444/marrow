@@ -145,6 +145,30 @@ export const notes = pgTable("notes", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** PRD §6.3 review queue: an expression the owner marked "learn", with its spaced-repetition schedule. */
+export const expressionReviews = pgTable(
+  "expression_reviews",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+    n: integer("n").notNull(), // index into the item's language_pack.expressions
+    text: text("text").notNull(),
+    kind: text("kind").notNull(),
+    explanation: text("explanation").notNull(),
+    tStart: real("t_start").notNull(),
+    tEnd: real("t_end").notNull(),
+    clipKey: text("clip_key"),
+    stage: integer("stage").notNull().default(0), // 0 → due in 2d, 1 → 7d, 2+ → 30d
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    reviews: integer("reviews").notNull().default(0),
+    lastResult: text("last_result"), // got_it | again
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("expression_reviews_item_n_uq").on(t.itemId, t.n), index("expression_reviews_due_idx").on(t.dueAt)],
+);
+export type ExpressionReview = typeof expressionReviews.$inferSelect;
+
 export const events = pgTable("events", {
   id: text("id").primaryKey(),
   itemId: text("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),

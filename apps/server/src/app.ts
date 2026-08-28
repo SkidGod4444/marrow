@@ -6,6 +6,7 @@ import {
   SOURCE_TYPES, type CaptureInput, type SourceKind, addSource, archiveItem, audioKey, captureEmail, createCapture, createIngest, createNamespace, exportItemMarkdown, exportItemText,
   exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, listEntities, listInbox, listItems, listNamespaces, listSources,
   logEvent, lookupEntity, normalizeInboundEmail, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, streamNamespaceChat, streamVideoChat,
+  answerReview, clipKey, listExpressions, reviewQueue, reviewSummary, saveExpression, unsaveExpression, updateNamespaceFlags,
 } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
@@ -47,6 +48,12 @@ export function createApp(deps: AppDeps) {
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400);
     }
+  });
+
+  app.patch("/namespaces/:ref", async (c) => {
+    const body = await c.req.json<{ flags?: Record<string, boolean> }>().catch(() => ({}) as { flags?: Record<string, boolean> });
+    const ns = await updateNamespaceFlags(deps.db, c.req.param("ref"), body.flags ?? {});
+    return ns ? c.json({ namespace: ns }) : c.json({ error: "namespace not found" }, 404);
   });
 
   app.get("/namespaces/:ref/entities", async (c) => {
@@ -240,6 +247,41 @@ export function createApp(deps: AppDeps) {
       return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": "private, max-age=3600" });
     }
     return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": type, "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": "private, max-age=3600" });
+  });
+
+  // ---- Language mode + review queue (PRD §6.3) ----
+  app.get("/items/:id/expressions", async (c) => {
+    const r = await listExpressions({ db: deps.db, storage: deps.storage }, c.req.param("id"));
+    return r ? c.json(r) : c.json({ error: "item not found" }, 404);
+  });
+
+  app.post("/items/:id/expressions/:n/save", async (c) => {
+    try {
+      const review = await saveExpression({ db: deps.db, storage: deps.storage }, c.req.param("id"), Number(c.req.param("n")));
+      return c.json({ review }, 201);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 404);
+    }
+  });
+
+  app.delete("/items/:id/expressions/:n/save", async (c) => ((await unsaveExpression(deps.db, c.req.param("id"), Number(c.req.param("n")))) ? c.json({ ok: true }) : c.json({ error: "not saved" }, 404)));
+
+  app.get("/items/:id/clips/:n", async (c) => {
+    const key = clipKey(c.req.param("id"), Number(c.req.param("n")));
+    if (!(await deps.storage.exists(key))) return c.json({ error: "clip not found" }, 404);
+    const bytes = await deps.storage.get(key);
+    const type = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 ? "audio/wav" : "audio/mp4"; // RIFF → WAV (fakes), else AAC
+    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": type, "content-length": String(bytes.byteLength), "cache-control": "private, max-age=86400" });
+  });
+
+  const nowOf = (raw: string | undefined) => (raw && !Number.isNaN(new Date(raw).getTime()) ? new Date(raw) : new Date());
+  app.get("/reviews", async (c) => c.json(await reviewQueue(deps.db, { now: nowOf(c.req.query("now")) })));
+  app.get("/reviews/summary", async (c) => c.json(await reviewSummary(deps.db, nowOf(c.req.query("now")))));
+  app.post("/reviews/:id/answer", async (c) => {
+    const body = await c.req.json<{ result?: "got_it" | "again" }>().catch(() => ({}) as { result?: "got_it" | "again" });
+    if (body.result !== "got_it" && body.result !== "again") return c.json({ error: "result must be got_it or again" }, 400);
+    const review = await answerReview(deps.db, c.req.param("id"), body.result);
+    return review ? c.json({ review }) : c.json({ error: "review not found" }, 404);
   });
 
   app.get("/items/:id/export.md", async (c) => {

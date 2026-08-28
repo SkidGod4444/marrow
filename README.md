@@ -114,6 +114,7 @@ All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) whe
 | Apply migrations to `DATABASE_URL` | `bun run db:migrate` (the server and CLI also migrate on start) |
 | Run the server | `bun run server` (`server:dev` for watch mode) |
 | Run the web app | `bun run web` (needs `apps/web/.env.local`) · `bun run build` builds everything via Turborepo |
+| Language mode | Flag a namespace `language_learning` (library toggle or the new-namespace checkbox): podcasts and videos get a **Language** tab — idioms, phrasal verbs, collocations and slang with a playable clip of the exact span and a jump link; **Learn** puts one in the review queue (`/review`), which brings it back after 2 days, then 7, then 30. MCP: `list_expressions`, `save_expression`, `review_queue`, `answer_review`. |
 | Capture | `docs/CAPTURE.md` — `POST /capture`, iOS/Android share sheet, bookmarklet, inbound email webhook, RSS/podcast feeds, Obsidian export |
 | Deploy | `docs/DEPLOY.md` — web app on **Vercel** (root dir `apps/web`, push-to-deploy), server/API on **AWS** (EC2 + RDS + S3, `docker-compose.prod.yml` with Caddy); server self-deploys from `main` via `docker/marrow-deploy.timer` on the box |
 

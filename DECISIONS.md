@@ -170,3 +170,11 @@ Playwright drives the real Next.js app against the real Hono server in `MARROW_F
 ## 2026-08-28 — Colour contrast is enforced (WCAG AA)
 
 The axe scan in the E2E suite now includes `color-contrast`. Tokens were re-tuned so every text colour clears 4.5:1 on every ink, including key faces and 80%-opacity placeholders: `--muted-foreground` #9a9a96 → #a6a6a2 (≥ 5.1:1), `--time` oklch L 0.72 → 0.74, `--destructive` L 0.70 → 0.74 (≥ 4.9:1); placeholders render at full muted ink (`::placeholder { opacity: 1 }` overriding Tailwind's 50% currentColor). The audit also exposed a real bug: shadcn's InputGroup dims itself (`has-disabled:opacity-50`) whenever *any* descendant is disabled — the chat's empty-state submit button faded the whole prompt box to 50%; it now only dims when its own control is disabled. (design system, PRD §14)
+
+## 2026-08-28 — Phase 6: language mode + review queue (PRD §6.3, §14)
+
+- **Expression spans come from word timestamps**: the model only names the expression and its line time; `locateSpan` matches the exact word run (normalised, near that time) so the clip is the spoken span, not a whole line — the PRD's reason for mandating word-level timestamps. A miss falls back to the line span and is counted in the stage log.
+- **Clips are AAC (`cutClip`, ±0.15 s padding) at `clips/{item}/{n}.m4a`**, served by `GET /items/:id/clips/:n` (content type sniffed so the fakes' WAVs play too).
+- **Review queue is a table (`expression_reviews`)**, not document state: "learn" marks, stage and due date are the owner's data and must survive re-ingests (which replace the document). Schedule: 2d → 7d → 30d, then every 30d; "again" restarts at 2d. Answers are stamped with real time; `?now=` on `/reviews` exists only so tests and demos can time-travel.
+- **Language mode is a per-namespace switch** (library toggle → `PATCH /namespaces/:ref`, new-namespace checkbox); turning it on later and re-running an item (`--force`) adds the pack without redoing transcription (stage checkpoints).
+- The nav shows **Review** always (so the feature is discoverable) with a due-count badge; the page explains where expressions come from when the queue is empty.

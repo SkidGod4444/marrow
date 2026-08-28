@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { IngestForm } from "@/components/marrow/ingest-form";
+import { LanguageModeToggle } from "@/components/marrow/namespace-flags";
 import { Markdown } from "@/components/marrow/markdown";
 import { SourcesPanel } from "@/components/marrow/sources-panel";
 import { api } from "@/lib/api";
@@ -50,6 +51,7 @@ export default async function LibraryPage() {
                 {ns.readyCount}/{ns.itemCount} ready
               </span>
               {ns.description && <span className="text-sm text-muted-foreground">{ns.description}</span>}
+              <LanguageModeToggle namespace={ns.name} on={Boolean(ns.flags?.language_learning)} />
               {ns.readyCount > 0 && (
                 <span className="ml-auto flex items-center gap-4 text-[13px] text-muted-foreground">
                   <Link href={`/namespaces/${encodeURIComponent(ns.name)}/chat`} className="underline-offset-[3px] hover:text-foreground hover:underline">

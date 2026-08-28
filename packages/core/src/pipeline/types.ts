@@ -20,6 +20,8 @@ export interface Providers {
   extractAudio(src: string, out: string): Promise<void>;
   detectSilences(path: string): Promise<Silence[]>;
   cutAudio(src: string, start: number, end: number, out: string): Promise<void>;
+  /** Language mode: a short AAC clip of exactly one expression (plays natively in browsers). */
+  cutClip(src: string, start: number, end: number, out: string): Promise<void>;
   extractKeyframes(video: string, outDir: string): Promise<Keyframe[]>;
   extractEvenFrames(video: string, outDir: string, everyS: number): Promise<Keyframe[]>;
   transcribe(path: string, usage: UsageTracker): Promise<SttResult>;

@@ -129,6 +129,10 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
       hit("cutAudio");
       await writeFile(out, "fake-chunk");
     },
+    async cutClip(_src, _s, _e, out) {
+      hit("cutClip");
+      await writeFile(out, fakeWav(1));
+    },
     async extractEvenFrames(_video, outDir, everyS) {
       hit("extractEvenFrames");
       await mkdir(outDir, { recursive: true });
@@ -221,6 +225,14 @@ export function fakeProviders(opts: FakeOptions = {}): Providers & { calls: Reco
             covered_by: idx === 0 ? s.matches.slice(0, 2).map((m) => ({ item_id: m.item_id, t: m.t })) : [],
           })),
         } as never;
+      }
+      if (o.schemaName === "language_pack") {
+        const kinds = ["idiom", "phrasal_verb", "collocation", "slang", "other"] as const;
+        const picks = [
+          ["talk about", 0], ["we talk about", 10], ["the Tobin et al paper", 20], ["domain randomization", 30], ["talk about the", 40], ["paper and domain", 50],
+          ["randomization at", 60], ["on sim", 70], ["et al", 80], ["about the Tobin", 90], ["we talk", 100], ["and domain randomization", 110],
+        ];
+        return { expressions: picks.map(([text, t], i) => ({ text, kind: kinds[i % kinds.length], explanation: `Meaning of "${text}" — used here in a technical conversation.`, t })) } as never;
       }
       if (o.schemaName === "namespace_summary") {
         const input = JSON.parse(o.user as string) as { items: Array<{ title: string }>; entities: Array<{ name: string }> };

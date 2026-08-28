@@ -4,8 +4,10 @@ import { useCallback, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PresentedDocument } from "@/lib/api";
 import { isTextKind } from "@/lib/kind";
+import type { ExpressionView } from "@marrow/core";
 import { Chat } from "./chat";
 import { Description } from "./description";
+import { LanguagePack } from "./language-pack";
 import { Markdown } from "./markdown";
 import { PlayerFrame, PlayerProvider, youtubeId } from "./player";
 import { Reader } from "./reader";
@@ -14,8 +16,11 @@ import { Eyebrow, TimestampButton } from "./timestamp-link";
 import { Transcript } from "./transcript";
 
 /** Item page body: sticky player + chapters on the left, Reader / Chat / Transcript on the right (PRD §14 Phase 3). */
-export function ItemView({ doc, initialT = null, initialTab = "reader", className = "" }: { doc: PresentedDocument; initialT?: number | null; initialTab?: "reader" | "chat" | "transcript"; className?: string }) {
-  const [tab, setTab] = useState<"reader" | "chat" | "transcript">(initialTab);
+type Tab = "reader" | "chat" | "transcript" | "language";
+
+export function ItemView({ doc, expressions = [], initialT = null, initialTab = "reader", className = "" }: { doc: PresentedDocument; expressions?: ExpressionView[]; initialT?: number | null; initialTab?: Tab; className?: string }) {
+  const hasLanguage = expressions.length > 0;
+  const [tab, setTab] = useState<Tab>(initialTab === "language" && !hasLanguage ? "reader" : initialTab);
   const [seed, setSeed] = useState<string | null>(null);
   const ask = useCallback((prompt: string) => {
     setSeed(prompt);
@@ -58,6 +63,11 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
               {text ? "Text" : "Transcript"}
               {!text && doc.transcript_entries ? <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{doc.transcript_entries}</span> : null}
             </TabsTrigger>
+            {hasLanguage && (
+              <TabsTrigger value="language">
+                Language<span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{expressions.length}</span>
+              </TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="reader" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
             <Reader doc={doc} onAsk={ask} />
@@ -75,6 +85,11 @@ export function ItemView({ doc, initialT = null, initialTab = "reader", classNam
               <Transcript doc={doc} />
             )}
           </TabsContent>
+          {hasLanguage && (
+            <TabsContent value="language" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+              <LanguagePack itemId={doc.id} initial={expressions} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </PlayerProvider>

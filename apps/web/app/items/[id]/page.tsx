@@ -28,7 +28,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
   const sp = await searchParams;
   const tParam = Array.isArray(sp.t) ? sp.t[0] : sp.t;
   const initialT = tParam && /^\d+(\.\d+)?$/.test(tParam) ? Number(tParam) : null;
-  const tab = sp.tab === "chat" || sp.tab === "transcript" ? sp.tab : "reader";
+  const tab = sp.tab === "chat" || sp.tab === "transcript" || sp.tab === "language" ? sp.tab : "reader";
   const item = await api.item(id).catch(() => null);
   if (!item) notFound();
   if (item.status !== "ready") {
@@ -55,7 +55,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
       </div>
     );
   }
-  const doc = await api.document(id);
+  const [doc, lang] = await Promise.all([api.document(id), api.expressions(id).catch(() => null)]);
   void api.event(id, "read");
 
   return (
@@ -82,7 +82,7 @@ export default async function ItemPage({ params, searchParams }: PageProps<"/ite
           </Link>
         </p>
       </header>
-      <ItemView doc={doc} initialT={initialT} initialTab={tab} className="lg:min-h-0 lg:flex-1" />
+      <ItemView doc={doc} expressions={lang?.expressions ?? []} initialT={initialT} initialTab={tab} className="lg:min-h-0 lg:flex-1" />
     </div>
   );
 }
