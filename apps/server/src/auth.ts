@@ -9,7 +9,7 @@ import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, ownerAc } from "better-auth/plugins/organization/access";
 import { apiKey } from "@better-auth/api-key";
 import { createHash } from "node:crypto";
-import { type Config, type Db, adoptOrphanNamespaces, authAccounts, authApiKeys, authInvitations, authMembers, authOrganizations, authSessions, authUsers, authVerifications, organizationCount, organizationsOf } from "@marrow/core";
+import { type Config, type Db, adoptOrphanNamespaces, authAccounts, authApiKeys, authInvitations, authMembers, authOrganizations, authSessions, authUsers, authVerifications, lastActiveOrganization, organizationCount, organizationsOf } from "@marrow/core";
 
 export type Auth = ReturnType<typeof createAuth>;
 
@@ -93,6 +93,7 @@ export function createAuth(db: Db, config: Config) {
         ac,
         roles,
         creatorRole: "owner",
+      requireEmailVerificationOnInvitation: false, // no mail provider: the invite link itself is the proof
         allowUserToCreateOrganization: true,
         invitationExpiresIn: 60 * 60 * 24 * 7,
         // No mail provider in the stack: the inviter copies the link from the members page.
@@ -121,7 +122,10 @@ export function createAuth(db: Db, config: Config) {
           before: async (session) => {
             // Land in a workspace: the one created first (personal), unless the client sets another.
             const orgs = await organizationsOf(db, session.userId);
-            return { data: { ...session, activeOrganizationId: orgs[0]?.id ?? null } };
+            // Come back to the workspace used last time (if still a member); otherwise the first one.
+            const last = await lastActiveOrganization(db, session.userId);
+            const remembered = last && orgs.some((o) => o.id === last) ? last : null;
+            return { data: { ...session, activeOrganizationId: remembered ?? orgs[0]?.id ?? null } };
           },
         },
       },

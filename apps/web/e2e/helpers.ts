@@ -34,10 +34,11 @@ export { expect };
 export const API = process.env.E2E_API_URL ?? "http://localhost:3101";
 /** Per-run suffix so tests that add things stay idempotent against a reused stack. */
 export const RUN = String(Date.now()).slice(-6);
+/** The instance key; it names the workspace it acts in with `x-marrow-org`. */
 export const KEY = "e2e-key";
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API}${path}`, { ...init, headers: { "x-api-key": KEY, "content-type": "application/json", ...init.headers } });
+  const res = await fetch(`${API}${path}`, { ...init, headers: { "x-api-key": KEY, "x-marrow-org": "demo-lab", "content-type": "application/json", ...init.headers } });
   if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
   return (await res.json()) as T;
 }

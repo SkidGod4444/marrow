@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 // auth endpoints redirects to /login. The cookie is only checked for presence here — pages and the API proxy verify
 // it against the server. MARROW_AUTH=off disables the gate for local work.
 // `_vercel/` = Vercel Analytics/Speed Insights scripts (production only); redirecting those to HTML breaks the page.
-const PUBLIC = [/^\/login$/, /^\/api\/auth\//, /^\/_next\//, /^\/_vercel\//, /^\/favicon\.ico$/, /^\/icon/, /^\/apple-icon/, /^\/opengraph-image/, /^\/brand\//, /^\/robots\.txt$/, /^\/manifest/];
+const PUBLIC = [/^\/login$/, /^\/signup$/, /^\/api\/auth\//, /^\/_next\//, /^\/_vercel\//, /^\/favicon\.ico$/, /^\/icon/, /^\/apple-icon/, /^\/opengraph-image/, /^\/brand\//, /^\/robots\.txt$/, /^\/manifest/];
 
 export function proxy(req: NextRequest) {
   if (process.env.MARROW_AUTH === "off") return NextResponse.next();

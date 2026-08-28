@@ -1,7 +1,7 @@
 // Who is calling, and in which workspace. Three ways in: the web app's session cookie (proxied), a per-user API key
 // (`x-api-key: mrw_…`, bound to one workspace at creation), or the instance key (`MARROW_API_KEY`) for operators — that
 // one must name the workspace (`x-marrow-org` header or `organization` query) and acts as an owner in it.
-import { type Db, type Role, getOrganization, membership, organizationsOf } from "@marrow/core";
+import { type Db, type Role, getOrganization, membership, organizationsOf, getUser } from "@marrow/core";
 import type { Auth } from "./auth.ts";
 import { type Action, type Resource, permissionsOf, roleCan } from "./auth.ts";
 
@@ -45,7 +45,8 @@ export async function resolvePrincipal(deps: PrincipalDeps, headers: Headers, or
     const m = orgId ? await membership(db, userId, orgId) : null;
     if (orgId && !m) return null; // key outlived the membership
     const org = orgId ? await getOrganization(db, orgId) : null;
-    return { userId, email: "", name: v.key.name ?? "API key", organizationId: orgId, organizationSlug: org?.slug ?? null, role: (m?.role as Role) ?? "viewer", via: "apikey" };
+    const user = await getUser(db, userId);
+    return { userId, email: user?.email ?? "", name: user?.name ?? v.key.name ?? "API key", organizationId: orgId, organizationSlug: org?.slug ?? null, role: (m?.role as Role) ?? "viewer", via: "apikey" };
   }
 
   const session = await auth.api.getSession({ headers }).catch(() => null);

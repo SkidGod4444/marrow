@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useCan } from "./me-provider";
 
 const NEW = "__new__";
 
@@ -22,6 +23,8 @@ const looksLikeFeed = (u: string) => /\.(xml|rss|atom)(\?|$)|\/(feed|rss)\/?(\?|
  */
 export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
   const router = useRouter();
+  const canAdd = useCan("item:add");
+  const canCreateNs = useCan("namespace:create");
   const [namespaces, setNamespaces] = useState(initial);
   const [mode, setMode] = useState<"link" | "text">("link");
   const [url, setUrl] = useState("");
@@ -120,6 +123,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
     }
   };
 
+  if (!canAdd) return <p className="text-[13px] text-muted-foreground">You can read everything here; adding is for members and up.</p>;
   return (
     <form onSubmit={submit} className={`flex w-full flex-col gap-2 ${mode === "text" ? "basis-full" : "sm:w-auto"}`}>
       <div className="flex w-full flex-wrap items-center gap-2">
@@ -147,7 +151,7 @@ export function IngestForm({ namespaces: initial }: { namespaces: string[] }) {
                 {n}
               </SelectItem>
             ))}
-            <SelectItem value={NEW}>New namespace…</SelectItem>
+            {canCreateNs && <SelectItem value={NEW}>New namespace…</SelectItem>}
           </SelectContent>
         </Select>
         <Dialog

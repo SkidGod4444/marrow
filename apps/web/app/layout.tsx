@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" suppressHydrationWarning className={`${serif.variable} ${sans.variable} ${mono.variable} dark h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
+          <QueryProvider>
           <TooltipProvider>
             <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-foreground focus:px-3 focus:py-1.5 focus:text-[13px] focus:text-background">
               Skip to content
@@ -39,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {/* Vercel Web Analytics — page views only; no-op outside Vercel (local, E2E). */}
             <Analytics />
           </TooltipProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

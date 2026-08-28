@@ -1,4 +1,5 @@
-import { and, asc, count, eq } from "drizzle-orm";
+import { authSessions, authUsers } from "../db/schema";
+import { and, asc, count, desc, eq, isNotNull } from "drizzle-orm";
 import { type Db, type Member, type Organization, authMembers, authOrganizations } from "../db/index.ts";
 
 // Workspaces are managed by Better Auth's organization plugin (members, invitations, roles). These are the read
@@ -38,4 +39,21 @@ export async function getOrganization(db: Db, ref: string): Promise<Organization
 export async function organizationCount(db: Db): Promise<number> {
   const [row] = await db.select({ n: count() }).from(authOrganizations);
   return Number(row?.n ?? 0);
+}
+
+/** The workspace this user had active in their most recent session, if any — a fresh sign-in returns there. */
+export async function lastActiveOrganization(db: Db, userId: string): Promise<string | null> {
+  const [last] = await db
+    .select({ id: authSessions.activeOrganizationId })
+    .from(authSessions)
+    .where(and(eq(authSessions.userId, userId), isNotNull(authSessions.activeOrganizationId)))
+    .orderBy(desc(authSessions.updatedAt))
+    .limit(1);
+  return last?.id ?? null;
+}
+
+/** The account behind a user id (API keys carry only the id). */
+export async function getUser(db: Db, id: string): Promise<{ id: string; email: string; name: string } | null> {
+  const [row] = await db.select({ id: authUsers.id, email: authUsers.email, name: authUsers.name }).from(authUsers).where(eq(authUsers.id, id));
+  return row ?? null;
 }

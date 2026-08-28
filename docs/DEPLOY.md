@@ -90,7 +90,7 @@ docker compose -f docker-compose.prod.yml logs -f server   # wait for "marrow se
 
 Then:
 - `https://api.marrow.yourdomain.com/health` → `{"ok":true}`; MCP at `https://api.marrow.yourdomain.com/mcp`.
-- Claude Code: `claude mcp add --transport http marrow https://api.marrow.yourdomain.com/mcp --header "x-api-key: <MARROW_API_KEY>"`.
+- Claude Code: `claude mcp add --transport http marrow https://api.marrow.yourdomain.com/mcp --header "x-api-key: <your key from Settings → API keys>"`.
 
 Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 
@@ -103,7 +103,7 @@ Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
    - `MARROW_API_KEY` = the same value as in the server's `.env`
    - `NEXT_PUBLIC_SITE_URL` = `https://marrow.yourdomain.com` (optional; falls back to the Vercel production URL)
 4. Deploy. Then *Settings → Domains* → add `marrow.yourdomain.com` and create the CNAME Vercel shows at your registrar.
-5. Open `https://marrow.yourdomain.com`: the first visit shows **Create your account** — do it straight away (sign-up closes after the first account; see "Owner login" below). Then check the inbox, an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
+5. Open `https://marrow.yourdomain.com`, **create your account** — the first workspace made on a fresh instance adopts any namespaces that already exist (see "Accounts" below) — and invite your people from Settings. Then check the inbox, an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
 
 Every push to `main` redeploys the web app; the API on EC2 updates with `git pull` + compose as above.
 
@@ -131,16 +131,20 @@ FORCE=1 ./scripts/deploy-ec2.sh                  # rebuild even when nothing cha
 
 Only server-side changes matter to the box; a web-only commit rebuilds in a minute or two and restarts the same code. `.github/workflows/ci.yml` lints, typechecks and tests every push/PR on GitHub.
 
-## Owner login
+## Accounts
 
-The web app is private: the first person to open it creates the owner account (email + password), and sign-up closes for good after that — so do it right after the first deploy. Two variables on the **server** (`.env` on the box; the next deploy — any push to `main`, or `FORCE=1 ./scripts/deploy-ec2.sh` — restarts the container with them):
+The web app is multi-user: anyone who reaches it can sign up and gets a workspace of their own; people join yours through an invitation link from Settings (nothing is e-mailed). Two variables on the **server** (`.env` on the box; the next deploy — any push to `main`, or `FORCE=1 ./scripts/deploy-ec2.sh` — restarts the container with them):
 
 ```
 MARROW_WEB_URL=https://try-marrow.vercel.app      # exactly the address you open the web app at
 BETTER_AUTH_SECRET=<openssl rand -hex 32>
 ```
 
-Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. The gate is `apps/web/proxy.ts` plus the `(app)` layout; `MARROW_AUTH=off` in the web app's env removes it (local development only — never on Vercel). Until `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` are set, the server derives a secret from `MARROW_API_KEY` and trusts the web proxy's origin, so a fresh deploy can still sign in. MCP and the CLI keep using `MARROW_API_KEY`. Forgot the password? There is no reset e-mail in a single-owner tool — delete the row in `auth_user` on RDS and open the web app again to recreate the account.
+Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. The gate is `apps/web/proxy.ts` plus the `(app)` layout, and the API checks the role behind every route; `MARROW_AUTH=off` in the web app's env removes sign-in (local development only — never on Vercel). Until `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` are set, the server derives a secret from `MARROW_API_KEY` and trusts the web proxy's origin, so a fresh deploy can still sign in. Changing the secret signs everyone out once.
+
+**Upgrading from the single-owner version:** namespaces created before workspaces existed have no workspace. The **first workspace created on the instance adopts them** — so the first account to sign up after the upgrade (its personal workspace is created on sign-up) owns the old library. Invite the others from Settings afterwards.
+
+`MARROW_API_KEY` stays the instance key for the CLI and operations; it acts in the workspace named by `x-marrow-org: <slug>`. People connecting Claude Code use their own key from Settings → API keys instead. Inbound e-mail routes to `INBOUND_EMAIL_NAMESPACE=<workspace-slug>/<namespace>`.
 
 ## Database migrations
 

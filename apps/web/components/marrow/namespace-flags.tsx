@@ -6,11 +6,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCan } from "./me-provider";
 
 /** Library: switch language mode on/off for a namespace (PRD §6.3 — expressions + clips are mined for its podcasts). */
 export function LanguageModeToggle({ namespace, on }: { namespace: string; on: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const canUpdate = useCan("namespace:update");
   const toggle = async () => {
     setBusy(true);
     try {
@@ -24,6 +26,7 @@ export function LanguageModeToggle({ namespace, on }: { namespace: string; on: b
       setBusy(false);
     }
   };
+  if (!canUpdate) return null;
   return (
     <Tooltip>
       <TooltipTrigger render={<Button variant={on ? "secondary" : "ghost"} size="xs" aria-pressed={on} disabled={busy} onClick={() => void toggle()} className={on ? "" : "text-muted-foreground"} />}>

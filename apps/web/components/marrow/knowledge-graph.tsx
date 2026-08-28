@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { kindLabel } from "@/lib/kind";
+import { useUiStore } from "@/lib/store";
 import { fmtDay, fmtTs } from "@/lib/time";
 
 // Knowledge graph of a namespace: item nodes (squares) and entity nodes (circles, coloured by kind, sized by
@@ -46,10 +47,17 @@ export function KnowledgeGraph({ data, focus }: { data: NamespaceGraph; focus?: 
   const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null);
   const [query, setQuery] = useState("");
   const [hiddenKinds, setHiddenKinds] = useState<Set<string>>(new Set());
-  const [layout, setLayout] = useState<Layout>("force");
-  const [minMentions, setMinMentions] = useState(1);
-  const [contestedOnly, setContestedOnly] = useState(false);
-  const [labels, setLabels] = useState<"auto" | "all" | "none">("auto");
+  // Layout, labels and filters are remembered across visits (persisted UI store).
+  const prefs = useUiStore((s) => s.graph);
+  const setGraph = useUiStore((s) => s.setGraph);
+  const layout = prefs.layout;
+  const minMentions = prefs.minMentions;
+  const contestedOnly = prefs.contestedOnly;
+  const labels = prefs.labels;
+  const setLayout = (l: Layout) => setGraph({ layout: l });
+  const setMinMentions = (n: number) => setGraph({ minMentions: n });
+  const setContestedOnly = (f: (v: boolean) => boolean) => setGraph({ contestedOnly: f(contestedOnly) });
+  const setLabels = (f: (v: "auto" | "all" | "none") => "auto" | "all" | "none") => setGraph({ labels: f(labels) });
   const [pinned, setPinned] = useState<Set<string>>(new Set());
   const zoomRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null);
 

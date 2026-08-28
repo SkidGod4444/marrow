@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCan } from "./me-provider";
 import type { PresentedDocument } from "@/lib/api";
 import { isTextKind } from "@/lib/kind";
 import type { ExpressionView } from "@marrow/core";
@@ -28,6 +29,7 @@ export function ItemView({ doc, expressions = [], initialT = null, initialTab = 
   }, []);
   const consumed = useCallback(() => setSeed(null), []);
   const text = isTextKind(doc.source_type);
+  const canChat = useCan("chat:use"); // viewers read; chat is for members and up
   const videoId = doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null;
   // Podcast episodes / uploads: the pipeline's audio is streamed from the API (through the proxy) into our player.
   const audioSrc = !text && !videoId && doc.pipeline.stages_completed.includes("fetch") ? `/api/marrow/items/${doc.id}/audio` : null;
@@ -55,10 +57,10 @@ export function ItemView({ doc, expressions = [], initialT = null, initialTab = 
         </div>
 
         {/* Right pane: tab list stays put; each tab's content scrolls inside the pane. */}
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="min-w-0 gap-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+        <Tabs value={tab === "chat" && !canChat ? "reader" : tab} onValueChange={(v) => setTab(v as typeof tab)} className="min-w-0 gap-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
           <TabsList variant="line" className="w-full shrink-0 justify-start gap-4 border-b border-border/70">
             <TabsTrigger value="reader">Reader</TabsTrigger>
-            <TabsTrigger value="chat">Chat</TabsTrigger>
+            {canChat && <TabsTrigger value="chat">Chat</TabsTrigger>}
             <TabsTrigger value="transcript">
               {text ? "Text" : "Transcript"}
               {!text && doc.transcript_entries ? <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{doc.transcript_entries}</span> : null}
@@ -70,12 +72,14 @@ export function ItemView({ doc, expressions = [], initialT = null, initialTab = 
             )}
           </TabsList>
           <TabsContent value="reader" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
-            <Reader doc={doc} onAsk={ask} />
+            <Reader doc={doc} onAsk={canChat ? ask : undefined} />
           </TabsContent>
           {/* keepMounted panels get the `hidden` attribute when inactive; keep that winning over lg:flex. */}
-          <TabsContent value="chat" keepMounted className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col [&[hidden]]:hidden!">
-            <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} className="lg:h-full lg:min-h-0" />
-          </TabsContent>
+          {canChat && (
+            <TabsContent value="chat" keepMounted className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col [&[hidden]]:hidden!">
+              <Chat endpoint={`items/${doc.id}/chat`} chatId={doc.id} mode="item" seed={seed} onSeedConsumed={consumed} className="lg:h-full lg:min-h-0" />
+            </TabsContent>
+          )}
           <TabsContent value="transcript" className="lg:min-h-0 lg:flex-1 lg:flex lg:flex-col">
             {text ? (
               <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">

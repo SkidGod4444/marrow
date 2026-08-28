@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useAnswerReview } from "@/lib/queries";
+import { usePracticeStore } from "@/lib/store";
 import { fmtDay, fmtTs } from "@/lib/time";
 import { ContextQuote } from "./language-pack";
 
@@ -15,8 +17,10 @@ const KIND: Record<string, string> = { idiom: "idiom", phrasal_verb: "phrasal ve
 export function ReviewQueue({ due: initial, upcoming, total }: { due: ReviewCard[]; upcoming: ReviewCard[]; total: number }) {
   const [queue, setQueue] = useState(initial);
   const [revealed, setRevealed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(0);
+  const answerMutation = useAnswerReview();
+  const busy = answerMutation.isPending;
+  const { done, bump, reset } = usePracticeStore();
+  useEffect(() => reset(), [reset]);
   const total0 = initial.length;
   const [playing, setPlaying] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -52,21 +56,17 @@ export function ReviewQueue({ due: initial, upcoming, total }: { due: ReviewCard
   };
 
   const answer = async (result: "got_it" | "again") => {
-    if (!card) return;
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/marrow/reviews/${card.id}/answer`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ result }) });
-      const body = (await res.json().catch(() => ({}))) as { review?: { dueAt: string }; error?: string };
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      toast(result === "got_it" ? "Got it" : "See you in two days", { description: body.review ? `Next prompt ${fmtDay(body.review.dueAt)}.` : undefined });
-      setQueue((q) => q.slice(1));
-      setDone((d) => d + 1);
-      window.dispatchEvent(new Event("marrow:reviews-changed"));
-    } catch (err) {
-      toast.error("Couldn't save that answer", { description: (err as Error).message });
-    } finally {
-      setBusy(false);
-    }
+    if (!card || busy) return;
+    answerMutation.mutate(
+      { id: card.id, result },
+      {
+        onSuccess: (body) => {
+          toast(result === "got_it" ? "Got it" : "See you in two days", { description: body.review ? `Next prompt ${fmtDay(body.review.dueAt)}.` : undefined });
+          setQueue((q) => q.slice(1));
+          bump();
+        },
+      },
+    );
   };
 
   const later = () => {

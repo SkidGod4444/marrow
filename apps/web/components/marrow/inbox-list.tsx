@@ -10,6 +10,8 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kindLabel } from "@/lib/kind";
+import { useArchiveMutation, useIngestMutation } from "@/lib/queries";
+import { useCan } from "./me-provider";
 import { fmtDay, fmtTs } from "@/lib/time";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -29,35 +31,42 @@ const STAGE_LABEL: Record<string, string> = {
 export function InboxList({ entries, pending, showNamespace }: { entries: InboxEntry[]; pending: InboxEntry[]; showNamespace: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const canArchive = useCan("item:archive");
+  const canAdd = useCan("item:add");
+  const canChat = useCan("chat:use");
 
-  const archive = async (id: string, archived: boolean) => {
+  const archiveMutation = useArchiveMutation();
+  const ingestMutation = useIngestMutation();
+  const archive = (id: string, archived: boolean) => {
     setBusy(id);
-    try {
-      const res = await fetch(`/api/marrow/items/${id}/archive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived }) });
-      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? res.statusText);
-      if (archived) toast("Skipped", { action: { label: "Undo", onClick: () => void archive(id, false) } });
-      else toast.success("Back in the inbox");
-      router.refresh();
-    } catch (err) {
-      toast.error(archived ? "Couldn't skip" : "Couldn't restore", { description: (err as Error).message });
-    } finally {
-      setBusy(null);
-    }
+    archiveMutation.mutate(
+      { id, archived },
+      {
+        onSuccess: () => {
+          if (archived) toast("Skipped", { action: { label: "Undo", onClick: () => archive(id, false) } });
+          else toast.success("Back in the inbox");
+          router.refresh();
+        },
+        onError: (err) => toast.error(archived ? "Couldn't skip" : "Couldn't restore", { description: (err as Error).message }),
+        onSettled: () => setBusy(null),
+      },
+    );
   };
   const skip = (id: string) => archive(id, true);
 
-  const retry = async (e: InboxEntry) => {
+  const retry = (e: InboxEntry) => {
     setBusy(e.id);
-    try {
-      const res = await fetch("/api/marrow/ingest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ namespace: e.namespace.name, url: e.sourceUrl }) });
-      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? res.statusText);
-      toast.success("Retrying", { description: "Resumes at the stage that failed." });
-      router.refresh();
-    } catch (err) {
-      toast.error("Couldn't retry", { description: (err as Error).message });
-    } finally {
-      setBusy(null);
-    }
+    ingestMutation.mutate(
+      { namespace: e.namespace.id, url: e.sourceUrl },
+      {
+        onSuccess: () => {
+          toast.success("Retrying", { description: "Resumes at the stage that failed." });
+          router.refresh();
+        },
+        onError: (err) => toast.error("Couldn't retry", { description: (err as Error).message }),
+        onSettled: () => setBusy(null),
+      },
+    );
   };
 
   return (
@@ -98,17 +107,19 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
               <div className="flex items-start gap-2 sm:flex-col sm:items-stretch">
                 {p.status === "failed" ? (
                   <>
-                    <Button variant="outline" size="sm" disabled={busy === p.id} onClick={() => void retry(p)}>
-                      <RotateCcw />
-                      Retry
-                    </Button>
-                    {p.archivedAt ? (
-                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => void archive(p.id, false)}>
+                    {canAdd && (
+                      <Button variant="outline" size="sm" disabled={busy === p.id} onClick={() => retry(p)}>
+                        <RotateCcw />
+                        Retry
+                      </Button>
+                    )}
+                    {!canArchive ? null : p.archivedAt ? (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => archive(p.id, false)}>
                         <Undo2 />
                         Unskip
                       </Button>
                     ) : (
-                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => void skip(p.id)} title="Hide this one">
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === p.id} onClick={() => skip(p.id)} title="Hide this one">
                         <X />
                         Skip
                       </Button>
@@ -147,17 +158,19 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 <BookOpenText />
                 Read
               </Button>
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${e.id}?tab=chat`} />}>
-                <MessageSquareText />
-                Chat
-              </Button>
-              {e.archivedAt ? (
-                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => void archive(e.id, false)}>
+              {canChat && (
+                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/items/${e.id}?tab=chat`} />}>
+                  <MessageSquareText />
+                  Chat
+                </Button>
+              )}
+              {!canArchive ? null : e.archivedAt ? (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => archive(e.id, false)}>
                   <Undo2 />
                   Unskip
                 </Button>
               ) : (
-                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => void skip(e.id)}>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy === e.id} onClick={() => skip(e.id)}>
                   <X />
                   Skip
                 </Button>

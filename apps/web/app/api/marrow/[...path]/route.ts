@@ -1,4 +1,4 @@
-import { API_URL, apiHeaders } from "@/lib/api";
+import { API_URL, callerHeaders } from "@/lib/api";
 import { AUTH_ENABLED, getSession } from "@/lib/auth";
 
 // Transparent proxy to the Marrow API for client components (chat stream, frame images, ingest).
@@ -9,18 +9,18 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const ALLOW =
-  /^(items\/[^/]+\/(chat|events|archive|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
+  /^(me|items\/[^/]+\/(chat|events|archive|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {
   const { path } = await ctx.params;
   const target = path.join("/");
   if (!ALLOW.test(target)) return Response.json({ error: "not proxied" }, { status: 404 });
-  // The key is injected only for the signed-in owner — otherwise anyone with the URL could drive the API.
+  // Requests run as the signed-in user (their cookie is forwarded); strangers get nothing.
   if (AUTH_ENABLED && !(await getSession())) return Response.json({ error: "sign in first" }, { status: 401 });
   const url = new URL(req.url);
   const upstream = await fetch(`${API_URL}/${target}${url.search}`, {
     method: req.method,
-    headers: apiHeaders({
+    headers: await callerHeaders({
       ...(req.headers.get("content-type") ? { "content-type": req.headers.get("content-type")! } : {}),
       ...(req.headers.get("range") ? { range: req.headers.get("range")! } : {}), // audio seeking
       accept: req.headers.get("accept") ?? "*/*",

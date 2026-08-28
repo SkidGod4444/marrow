@@ -2,7 +2,7 @@
 
 Everything that isn't a video enters through **capture**: a web page, a paper, a pasted post, a newsletter, or a feed entry. The text is fetched or stored, turned into an article (summary, takeaways, sections), enriched (references, claims, entity index), split into searchable segments and triaged for novelty — the same document shape as a video, minus timestamps. Capture is idempotent: the same URL (or the same pasted text) in the same namespace is one item.
 
-All examples use `API=https://<api-host>` and `KEY=<MARROW_API_KEY>`. These talk to the API directly with the key, so the web app's owner login doesn't get in the way (and the bookmarklet works from any page); to add from inside the web app, use the Library's **Add to …** form instead.
+All examples use `API=https://<api-host>` and `KEY=<MARROW_API_KEY>`. These talk to the API directly with the key, so the web app's sign-in doesn't get in the way — use a personal key from Settings → API keys (bound to your workspace) or the instance key with `x-marrow-org: <workspace-slug>` (and the bookmarklet works from any page); to add from inside the web app, use the Library's **Add to …** form instead.
 
 ## 1. From anything: `POST /capture`
 
@@ -69,7 +69,7 @@ Setup (no domain needed):
 - **CloudMailin**: create an address → target = the URL above, format **JSON (normalized)**.
 - With your own domain, any of the above (or Amazon SES → SNS → a small forwarder) works the same way; the endpoint doesn't care who posts.
 
-Env: `INBOUND_EMAIL_TOKEN` (long random string, e.g. `openssl rand -hex 24`), `INBOUND_EMAIL_NAMESPACE` (optional default). Rotate the token by changing the env and the webhook URL.
+Env: `INBOUND_EMAIL_TOKEN` (long random string, e.g. `openssl rand -hex 24`), `INBOUND_EMAIL_NAMESPACE` (optional default, `<workspace-slug>/<namespace>`; plus-tags may use `lab.robotics` for the same). Rotate the token by changing the env and the webhook URL.
 
 ## 4. Feeds: podcasts and blogs
 

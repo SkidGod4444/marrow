@@ -3,9 +3,9 @@ import { LoginForm } from "@/components/marrow/login-form";
 import { AUTH_ENABLED, getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Create an account" };
 
-export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+export default async function SignupPage({ searchParams }: PageProps<"/signup">) {
   if (!AUTH_ENABLED) redirect("/");
   if (await getSession()) redirect("/");
   const sp = await searchParams;
@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <img src="/brand/marrow-mark.png?v=2" alt="" width={26} height={26} className="size-[26px] rounded-[6px]" />
           Marrow
         </div>
-        <LoginForm mode="sign-in" next={next} />
+        <LoginForm mode="sign-up" next={next} />
       </div>
     </main>
   );

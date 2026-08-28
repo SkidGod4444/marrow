@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLearnMutation } from "@/lib/queries";
 import { fmtDay, fmtTs } from "@/lib/time";
 import { usePlayerOptional } from "./player";
 import { Eyebrow, TimestampButton } from "./timestamp-link";
@@ -80,26 +81,22 @@ export function ContextQuote({ context, text, className = "" }: { context: strin
 /** PRD §6.3 language mode: expression · meaning · play the exact clip · jump to the moment · learn (review queue). */
 export function LanguagePack({ itemId, initial }: { itemId: string; initial: ExpressionView[] }) {
   const [rows, setRows] = useState(initial);
-  const [busy, setBusy] = useState<number | null>(null);
   const player = usePlayerOptional();
   const clips = useClipPlayer();
+  const learnMutation = useLearnMutation(itemId);
+  const busy = learnMutation.isPending ? learnMutation.variables?.n : null;
 
-  const learn = async (row: ExpressionView) => {
-    setBusy(row.n);
-    try {
-      const res = await fetch(`/api/marrow/items/${itemId}/expressions/${row.n}/save`, { method: row.saved ? "DELETE" : "POST" });
-      const body = (await res.json().catch(() => ({}))) as { review?: { dueAt: string }; error?: string };
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      setRows((rs) => rs.map((r) => (r.n === row.n ? { ...r, saved: !row.saved, due_at: row.saved ? null : (body.review?.dueAt ?? null) } : r)));
-      if (row.saved) toast("Removed from review");
-      else toast.success("Added to review", { description: `First recall prompt ${body.review ? fmtDay(body.review.dueAt) : "in 2 days"}, then 7 and 30 days later.` });
-      window.dispatchEvent(new Event("marrow:reviews-changed"));
-    } catch (err) {
-      toast.error("Couldn't update review", { description: (err as Error).message });
-    } finally {
-      setBusy(null);
-    }
-  };
+  const learn = (row: ExpressionView) =>
+    learnMutation.mutate(
+      { n: row.n, saved: row.saved },
+      {
+        onSuccess: (body) => {
+          setRows((rs) => rs.map((r) => (r.n === row.n ? { ...r, saved: !row.saved, due_at: row.saved ? null : (body.review?.dueAt ?? null) } : r)));
+          if (row.saved) toast("Removed from review");
+          else toast.success("Added to review", { description: `First recall prompt ${body.review ? fmtDay(body.review.dueAt) : "in 2 days"}, then 7 and 30 days later.` });
+        },
+      },
+    );
 
   const saved = rows.filter((r) => r.saved).length;
   return (
@@ -149,7 +146,7 @@ export function LanguagePack({ itemId, initial }: { itemId: string; initial: Exp
                 </div>
                 <div className="sm:order-3 sm:self-start">
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant={r.saved ? "secondary" : "outline"} size="sm" disabled={busy === r.n} aria-pressed={r.saved} onClick={() => void learn(r)} />}>
+                    <TooltipTrigger render={<Button variant={r.saved ? "secondary" : "outline"} size="sm" disabled={busy === r.n} aria-pressed={r.saved} onClick={() => learn(r)} />}>
                       {r.saved ? <BookmarkCheck /> : <BookmarkPlus />}
                       {r.saved ? "Learning" : "Learn"}
                     </TooltipTrigger>

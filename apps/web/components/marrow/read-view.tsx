@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { PresentedDocument } from "@/lib/api";
 import { isTextKind, isWebUrl } from "@/lib/kind";
+import { useUiStore } from "@/lib/store";
 import { fmtDay, fmtTs } from "@/lib/time";
 import { Markdown } from "./markdown";
 import { PlayerFrame, PlayerProvider, youtubeId } from "./player";
@@ -15,30 +16,16 @@ import { SpeakerDot } from "./speakers";
 import { TimestampButton } from "./timestamp-link";
 
 type Paragraph = { speaker: string; t_start: number; t_end: number; text: string };
-const STORAGE_KEY = "marrow:shared-page:player";
 
 /** The shared page: the item as a document — with the player (hideable; audio keeps going) and dialogue timecodes that seek it. */
 export function ReadView({ doc }: { doc: PresentedDocument }) {
+  // Remembered per browser (persisted UI store); hydration-safe: start visible, apply the preference after mount.
+  const hiddenPref = useUiStore((s) => s.sharedPlayerHidden);
+  const setHiddenPref = useUiStore((s) => s.setSharedPlayerHidden);
   const [showPlayer, setShowPlayer] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(STORAGE_KEY);
-      if (v === "hidden") setShowPlayer(false);
-    } catch {
-      /* private mode etc. */
-    }
-  }, []);
-  const togglePlayer = () => {
-    setShowPlayer((s) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, s ? "hidden" : "shown");
-      } catch {
-        /* ignore */
-      }
-      return !s;
-    });
-  };
+  useEffect(() => setShowPlayer(!hiddenPref), [hiddenPref]);
+  const togglePlayer = () => setHiddenPref(!hiddenPref);
 
   const entries = doc.transcript ?? [];
   const paragraphs: Paragraph[] = [];

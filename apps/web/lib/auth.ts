@@ -1,11 +1,11 @@
 import "server-only";
 import { headers } from "next/headers";
-import { API_URL, apiHeaders } from "./api";
+import { type Me, API_URL, AUTH_OFF, apiFetch } from "./api";
 
-// Owner login (Better Auth on the API server). The web app never sees passwords: sign-in/up go through /api/auth
-// (proxied), and every page checks the session cookie against the server. MARROW_AUTH=off removes the gate (dev only).
+// Accounts live on the API server (Better Auth). The web app forwards the browser's cookie and asks the API who is
+// calling (`/me`: user, workspaces, active workspace, permissions). MARROW_AUTH=off removes the gate (dev only).
 
-export const AUTH_ENABLED = process.env.MARROW_AUTH !== "off";
+export const AUTH_ENABLED = !AUTH_OFF;
 export type Session = { user: { id: string; email: string; name: string }; session: { expiresAt: string } };
 
 /** The session for the current request (reads the incoming cookie), or null. */
@@ -22,13 +22,13 @@ export async function getSession(): Promise<Session | null> {
   }
 }
 
-/** Has the owner account been created yet? (Drives the login page: first visit creates it.) */
-export async function authStatus(): Promise<{ enabled: boolean; has_owner: boolean }> {
+/** Who is calling, in which workspace, with which permissions — null when not signed in. */
+export async function getMe(): Promise<Me | null> {
   try {
-    const res = await fetch(`${API_URL}/auth/status`, { headers: apiHeaders(), cache: "no-store" });
-    if (!res.ok) return { enabled: AUTH_ENABLED, has_owner: true };
-    return (await res.json()) as { enabled: boolean; has_owner: boolean };
+    return await apiFetch<Me>("/me");
   } catch {
-    return { enabled: AUTH_ENABLED, has_owner: true };
+    return null;
   }
 }
+
+export const can = (me: Me | null | undefined, permission: string) => Boolean(me?.permissions.includes(permission));

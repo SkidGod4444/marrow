@@ -15,9 +15,18 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 
 All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
 
-## Owner login
+## Accounts, workspaces and roles
 
-The web app is private. On first open you create the owner account (email + password); after that nobody else can sign up. Set `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` on the server (see `docs/DEPLOY.md`); `MARROW_AUTH=off` removes the gate for local development. MCP and the CLI are unaffected — they use the API key.
+The web app is a multi-user product. Anyone can **sign up** (email + password) and gets a **workspace** of their own; a workspace holds namespaces, and people join it by **invitation link** (Settings → Invitations → Copy link — no mail is sent). Every member has one role:
+
+| Role | Can |
+|---|---|
+| **viewer** | read everything, practise expressions |
+| **member** | + add and skip items, follow / poll sources, chat, create their own API keys |
+| **admin** | + create / rename / delete namespaces, delete items, manage members and invitations |
+| **owner** | + the workspace itself (settings, delete) |
+
+The server is the gate (every route and MCP tool checks the caller's role); the UI just hides what you can't do. Two kinds of credential reach the API: a **session cookie** (the web app) and an **API key**. Personal keys (`mrw_…`) are created in Settings → API keys and are bound to one workspace — that is what Claude Code uses (see "Connect Claude Code"). The **instance key** (`MARROW_API_KEY`, for the CLI and operations) is not a member of anything: it names the workspace it acts in with `x-marrow-org: <workspace-slug>` (`--org` on the CLI, `MARROW_ORG` for MCP over stdio). `MARROW_AUTH=off` removes sign-in for local development — everything then runs as the instance. Server settings: `MARROW_WEB_URL`, `BETTER_AUTH_SECRET` (`docs/DEPLOY.md`).
 
 ## Quick start (local, no Docker)
 
@@ -39,7 +48,7 @@ With no `DATABASE_URL` the CLI uses PGlite (Postgres-in-WASM) at `.marrow/pglite
 ```bash
 bun run server                 # API + MCP + jobs on :3001
 cp apps/web/.env.example apps/web/.env.local   # MARROW_API_URL + MARROW_API_KEY (add MARROW_AUTH=off to skip the login locally)
-bun run web                    # Next.js on :3000 — first visit: create the owner account, then sign in
+bun run web                    # Next.js on :3000 — sign up, you get a workspace; invite others from Settings
 ```
 
 `/` is the **inbox** (PRD §6.4): every ready video you haven't skipped, newest first, with its summary and — once a namespace has more than five items — a novelty verdict ("34% new" + the new spans as timecodes). Read / Chat open the item; Skip archives it (undo in the toast). `/library` lists namespaces with their corpus summary, what they **follow** (playlists/channels, polled every `POLL_EVERY_MINUTES`, "check now" per source), an add form (**Add to \<namespace\>**: YouTube video → ingest, playlist/channel/feed → follow, anything else → capture; **Text** mode captures pasted text; **New namespace…** asks for a name — tick *Language learning* for expressions + clips), a per-namespace **Language mode** switch, and links to each namespace's **chat** and **graph**. `/namespaces/<name>/chat` is the cross-video research chat: it searches the corpus with the §8 tools and cites `[Title @ MM:SS](/items/…?t=…)` links that open the item at that moment. `/items/<id>` is the item page: sticky YouTube player + **Reader** (summary, takeaways, sections with timestamp margin links, "Ask about this" → chat), **Chat** (cites `[MM:SS]`; clicking seeks the player; "What's on screen now" sends the playback position so the model calls `view_frame`), **Transcript** (follows the playhead). The browser never sees the API key — client calls go through `app/api/marrow/[...path]`, which injects it only for the signed-in owner (`proxy.ts` + the `(app)` layout gate every page; `/login` is the only public page). `/review` (**Practice**, shown once language mode is in use) is the flashcard queue.
@@ -63,7 +72,7 @@ curl -X POST localhost:3001/ingest -H 'content-type: application/json' -d '{"nam
 curl localhost:3001/jobs/<job_id>
 ```
 
-Set `MARROW_API_KEY` in `.env` to require `x-api-key` on every request (always do this outside local dev).
+Set `MARROW_API_KEY` in `.env` to require a key on every request (always do this outside local dev). With accounts on, that instance key acts in the workspace named by `x-marrow-org: <slug>`; personal keys from Settings → API keys are already bound to theirs.
 
 ## Connect Claude Code (MCP)
 
@@ -71,13 +80,13 @@ Set `MARROW_API_KEY` in `.env` to require `x-api-key` on every request (always d
 
 ```bash
 bun run server                                   # or docker compose up
-claude mcp add --transport http marrow http://localhost:3001/mcp --header "x-api-key: $MARROW_API_KEY"
+claude mcp add --transport http marrow http://localhost:3001/mcp --header "x-api-key: mrw_…"   # your key from Settings → API keys
 ```
 
 or in a project's `.mcp.json`:
 
 ```json
-{ "mcpServers": { "marrow": { "type": "http", "url": "http://localhost:3001/mcp", "headers": { "x-api-key": "<MARROW_API_KEY>" } } } }
+{ "mcpServers": { "marrow": { "type": "http", "url": "http://localhost:3001/mcp", "headers": { "x-api-key": "mrw_…" } } } }
 ```
 
 **Over stdio** (no server needed; the MCP process runs ingest jobs itself and owns the PGlite DB while it is alive):
@@ -112,7 +121,7 @@ Tools: `list_namespaces`, `search`, `get_context`, `get_video_document`, `get_fr
 | `POST /namespaces/:ref/summary` · `POST /namespaces/:ref/chat` (AI SDK stream) | — |
 | `POST /items/:id/chat` (AI SDK UI-message stream) · `POST /items/:id/events {kind}` · `GET /items/:id/audio` (podcast playback) | — (web app) |
 
-All routes except `/health` require `x-api-key` (or `Authorization: Bearer`) when `MARROW_API_KEY` is set.
+All routes except `/health`, `/auth/status` and `/api/auth/*` need a session cookie or `x-api-key` (or `Authorization: Bearer`) — a personal key (`mrw_…`, bound to its workspace) or the instance key plus `x-marrow-org`. Every response is scoped to that workspace; `GET /me` tells you who you are and what you may do.
 
 ## Development
 
