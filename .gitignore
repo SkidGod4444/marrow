@@ -16,3 +16,5 @@ apps/web/.env.local
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/.auth/
+# operator-supplied files mounted into the server container (cookies, certificates)
+secrets/

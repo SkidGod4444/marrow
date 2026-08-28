@@ -17,19 +17,54 @@ export type YtMeta = {
   extractor?: string;
 };
 
+/** Flags every yt-dlp call gets: cookies / proxy for hosts YouTube flags, plus anything the operator appends. */
+export function ytdlpArgs(cfg: Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS">): string[] {
+  const out: string[] = [];
+  if (cfg.YTDLP_COOKIES) out.push("--cookies", cfg.YTDLP_COOKIES);
+  if (cfg.YTDLP_PROXY) out.push("--proxy", cfg.YTDLP_PROXY);
+  if (cfg.YTDLP_EXTRA_ARGS?.trim()) out.push(...cfg.YTDLP_EXTRA_ARGS.trim().split(/\s+/));
+  return out;
+}
+
+/** yt-dlp's stderr in a sentence a person can act on; the raw text stays in the log. */
+export function explainYtdlpError(message: string): string {
+  if (/Sign in to confirm you.re not a bot|confirm you.re not a bot/i.test(message))
+    return "YouTube is asking this server to sign in — it flags cloud addresses. Give yt-dlp a cookies file or a proxy (docs/DEPLOY.md → \"YouTube blocks the server\"), then retry.";
+  if (/Private video|Video unavailable|has been removed|This video is not available/i.test(message)) return "This video is private, removed or not available where the server is.";
+  if (/HTTP Error 429|Too Many Requests/i.test(message)) return "YouTube is rate-limiting this server — try again in a while.";
+  if (/is not a valid URL|Unsupported URL/i.test(message)) return "That link isn't something yt-dlp can download.";
+  if (/members-only|Join this channel/i.test(message)) return "This video is members-only.";
+  return message;
+}
+
+const explained = (err: unknown): Error => {
+  const raw = err instanceof Error ? err.message : String(err);
+  const plain = explainYtdlpError(raw);
+  return plain === raw ? (err as Error) : new Error(plain, { cause: err });
+};
+
 export async function fetchMetadata(cfg: Config, url: string): Promise<YtMeta> {
-  const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", url]);
-  return JSON.parse(stdout) as YtMeta;
+  try {
+    const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg), url]);
+    return JSON.parse(stdout) as YtMeta;
+  } catch (err) {
+    throw explained(err);
+  }
 }
 
 /** Download the best ≤ MAX_VIDEO_HEIGHT mp4 (video+audio) to `${outDir}/source.<ext>` and return the path. */
 export async function download(cfg: Config, url: string, outDir: string): Promise<string> {
   const h = cfg.MAX_VIDEO_HEIGHT;
   const format = `bv*[height<=${h}][ext=mp4]+ba[ext=m4a]/bv*[height<=${h}]+ba/b[height<=${h}]/b`;
-  await exec(cfg.YTDLP_BIN, [
-    "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
-    "-o", join(outDir, "source.%(ext)s"), url,
-  ]);
+  try {
+    await exec(cfg.YTDLP_BIN, [
+      "--no-playlist", "--no-warnings", "--no-progress", "-f", format, "--merge-output-format", "mp4",
+      ...ytdlpArgs(cfg),
+      "-o", join(outDir, "source.%(ext)s"), url,
+    ]);
+  } catch (err) {
+    throw explained(err);
+  }
   const files = await readdir(outDir);
   const src = files.find((f) => f.startsWith("source."));
   if (!src) throw new Error(`yt-dlp produced no source.* file in ${outDir}`);
@@ -43,7 +78,7 @@ export type PlaylistListing = { title: string | null; entries: PlaylistEntry[] }
 export async function listPlaylistEntries(cfg: Config, url: string, opts: { limit?: number } = {}): Promise<PlaylistListing> {
   const target = channelVideosUrl(url);
   const limit = opts.limit ?? 100;
-  const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), target]);
+  const { stdout } = await exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg), target]);
   const j = JSON.parse(stdout) as { title?: string; entries?: Array<{ id?: string; title?: string; url?: string; _type?: string; entries?: unknown[] }> };
   const entries: PlaylistEntry[] = [];
   for (const e of j.entries ?? []) {

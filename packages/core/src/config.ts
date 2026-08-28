@@ -78,6 +78,11 @@ export const ConfigSchema = z.object({
   // Ingest jobs run at the same time. Each one runs ffmpeg/yt-dlp: on a 1 GB box keep it at 1–2, on 2 GB+ 2–3.
   INGEST_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
   YTDLP_BIN: z.string().default("yt-dlp"),
+  // YouTube flags cloud addresses ("Sign in to confirm you're not a bot"). A Netscape cookies file exported from a
+  // signed-in browser, and/or a proxy, are what yt-dlp offers for that (docs/DEPLOY.md). Extra args: an escape hatch.
+  YTDLP_COOKIES: z.string().optional(),
+  YTDLP_PROXY: z.string().optional(),
+  YTDLP_EXTRA_ARGS: z.string().optional(),
   FFMPEG_BIN: z.string().default("ffmpeg"),
   FFPROBE_BIN: z.string().default("ffprobe"),
 

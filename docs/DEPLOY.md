@@ -151,6 +151,19 @@ The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passe
 
 **Every API deploy restarts the server** (image built first, then the container is replaced): roughly 10–20 s during which Caddy answers 502/503. The web app rides that out — page loads and reads retry for about a second (`apps/web/lib/http.ts`), a reply cut off mid-restart is treated as a failure rather than data, and if the window is longer the page says *"This page couldn't load … it may be restarting after an update"* with a **Try again** that re-fetches. Writes (adding, chatting) are never retried automatically; the person sees a plain "try again in a moment". If you want zero-downtime deploys later, run two server containers behind Caddy and swap them (`docker-compose.prod.yml` is a single service today).
 
+### YouTube blocks the server ("Sign in to confirm you're not a bot")
+
+YouTube flags cloud addresses: from the EC2 box every `yt-dlp` client gets `Sign in to confirm you're not a bot`, and the inbox card says *YouTube is asking this server to sign in*. yt-dlp's answer is a **cookies file from a signed-in browser**. Use a **spare Google account** made for this (YouTube may act on the account it sees downloading), and don't keep using that account in the same browser afterwards — YouTube rotates the cookies and the file goes stale.
+
+1. In Chrome, sign in to YouTube with the spare account, install *Get cookies.txt LOCALLY*, open youtube.com, export → `youtube-cookies.txt` (Netscape format).
+2. Copy it to the box (the folder is git-ignored and mounted read-only into the container):
+   ```bash
+   scp -i marrow-key.pem youtube-cookies.txt ubuntu@<ip>:~/marrow/secrets/youtube-cookies.txt
+   ```
+3. In the box's `.env`: `YTDLP_COOKIES=/secrets/youtube-cookies.txt`, then `FORCE=1 ./scripts/deploy-ec2.sh`. Press **Retry** on the card.
+
+Alternatives: `YTDLP_PROXY=http://user:pass@host:port` routes yt-dlp through a residential/other proxy (no cookies needed if that address isn't flagged); `YTDLP_EXTRA_ARGS` appends anything else yt-dlp wants (for instance a PO-token provider later). Test from the box: `docker compose -f docker-compose.prod.yml exec server yt-dlp -J --no-playlist --cookies /secrets/youtube-cookies.txt <url> | head -c 200`. Marrow still never automates a login — this is you exporting your own session once.
+
 ### The box: memory, swap, and how many jobs at once
 
 A `t4g.micro` (1 GB, no swap) runs the server fine but not comfortably: `docker compose … --build` alone has OOM-killed the running server during a deploy, and an ingest runs `yt-dlp` + `ffmpeg` on top of the server. Two things help:
