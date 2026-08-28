@@ -83,6 +83,10 @@ MARROW_API_DOMAIN=api.marrow.yourdomain.com
 
 **S3 credentials without keys (recommended):** EC2 → the instance → *Actions → Security → Modify IAM role* → create a role `marrow-ec2` with an inline policy allowing `s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket` on your bucket (and `arn:...:bucket/*`). The AWS SDK inside the server container picks the role up automatically — leave `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` empty. (Fallback: IAM → Users → create `marrow-s3` with the same policy → access key → put the pair in `.env`.)
 
+> **Docker needs one more setting for the role to work.** The server runs in a container, one network hop away from the instance metadata service. EC2 → the instance → *Actions → Instance settings → Modify instance metadata options* → **Response hop limit: 2** (leave IMDSv2 required). Without it the SDK inside the container reports `Could not load credentials from any providers` even with the role attached. Within five minutes `curl https://api…/health` shows `"storage":"ok"`; then press **Retry** on any failed card.
+>
+> **Keys instead of a role** (fine for a personal instance): IAM → Users → create `marrow-server` with an inline policy allowing `s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket` on the bucket and its objects → *Create access key (Application running on an AWS compute service)* → put both values in `.env` as `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` → `FORCE=1 ./scripts/deploy-ec2.sh`.
+
 ## 6. Launch
 
 ```bash
