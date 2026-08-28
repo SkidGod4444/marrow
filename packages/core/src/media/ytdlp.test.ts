@@ -56,9 +56,14 @@ describe("yt-dlp on a flagged host", () => {
     expect(jar.path).not.toBe(file);
     expect(await readFile(jar.path!, "utf8")).toContain("SID\tabc");
     expect(ytdlpArgs({ YTDLP_COOKIES: file, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined }, null, jar.path)).toEqual(["--cookies", jar.path]);
+    // an unchanged copy is not written back; a rotated one is, atomically, and the shared file then carries it
+    expect(await jar.commit()).toBe(false);
+    await import("node:fs/promises").then((fs) => fs.writeFile(jar.path!, "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\trotated\n"));
+    expect(await jar.commit()).toBe(true);
+    expect(await readFile(file, "utf8")).toContain("SID\trotated");
     await jar.cleanup();
     await expect(stat(jar.path!)).rejects.toThrow();
-    expect((await stat(file)).size).toBeGreaterThan(0); // untouched
+    expect((await stat(file)).size).toBeGreaterThan(0);
     expect((await privateCookies({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined, YTDLP_POT_PROVIDER_URL: undefined })).path).toBeNull();
   });
 

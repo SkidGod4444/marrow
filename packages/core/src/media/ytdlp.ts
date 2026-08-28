@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../config.ts";
@@ -22,16 +22,31 @@ export type YtMeta = {
 export type YtdlpConfig = Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS" | "YTDLP_POT_PROVIDER_URL">;
 
 /**
- * yt-dlp writes the cookie jar back after every run — and what it writes back is a shrunken jar (on the box: 637
- * YouTube cookies at export, 31 after a few runs) that YouTube then rejects. So every run gets a private copy of the
- * owner's file and the mounted file is never touched (docs/DEPLOY.md). Returns the args and a cleanup.
+ * The cookie jar is shared truth. YouTube rotates the session cookies on every authenticated request — yt-dlp's
+ * included — and whoever holds the rotated set owns the session. So each run works on a private copy (two runs never
+ * write the same file) and, when the run succeeded, `commit()` writes the rotated jar back atomically; the cookie
+ * keeper (apps/keeper) adopts a jar it did not write before its own visit. Discarding the rotation, as we once did,
+ * killed the session within the hour (docs/DEPLOY.md).
  */
-export async function privateCookies(cfg: YtdlpConfig): Promise<{ path: string | null; cleanup: () => Promise<void> }> {
-  if (!cfg.YTDLP_COOKIES) return { path: null, cleanup: async () => undefined };
+export async function privateCookies(cfg: YtdlpConfig): Promise<{ path: string | null; cleanup: () => Promise<void>; commit: () => Promise<boolean> }> {
+  if (!cfg.YTDLP_COOKIES) return { path: null, cleanup: async () => undefined, commit: async () => false };
+  const shared = cfg.YTDLP_COOKIES;
   const dir = await mkdtemp(join(tmpdir(), "marrow-cookies-"));
   const path = join(dir, "cookies.txt");
-  await copyFile(cfg.YTDLP_COOKIES, path);
-  return { path, cleanup: () => rm(dir, { recursive: true, force: true }) };
+  await copyFile(shared, path);
+  const before = await readFile(path, "utf8");
+  return {
+    path,
+    cleanup: () => rm(dir, { recursive: true, force: true }),
+    commit: async () => {
+      const after = await readFile(path, "utf8").catch(() => before);
+      if (after === before || !after.includes("youtube.com")) return false;
+      const tmp = `${shared}.${process.pid}.tmp`;
+      await writeFile(tmp, after);
+      await rename(tmp, shared);
+      return true;
+    },
+  };
 }
 
 export function ytdlpArgs(cfg: YtdlpConfig, jsRuntime: string | null = process.execPath, cookiesPath: string | null | undefined = cfg.YTDLP_COOKIES): string[] {
@@ -137,6 +152,7 @@ export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: 
       delaysMs: jar.path ? FALLBACK_DELAYS : [240_000],
       onRetry: (n) => opts.log?.(n === 1 && jar.path ? "YouTube bot check on metadata — trying once without cookies" : "YouTube bot check on metadata — waiting 4 min, then one more try"),
     });
+    await jar.commit().catch((e) => opts.log?.(`cookie jar write-back failed: ${String(e)}`));
     return JSON.parse(stdout) as YtMeta;
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
@@ -167,6 +183,7 @@ export async function download(cfg: Config, url: string, outDir: string, opts: {
         onRetry: (n) => opts.log?.(n === 1 && jar.path ? "YouTube bot check on download — trying once without cookies" : "YouTube bot check on download — waiting 4 min, then one more try"),
       },
     );
+    await jar.commit().catch((e) => opts.log?.(`cookie jar write-back failed: ${String(e)}`));
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);
     throw explained(cfg, err);
@@ -190,6 +207,7 @@ export async function listPlaylistEntries(cfg: Config, url: string, opts: { limi
   let stdout: string;
   try {
     ({ stdout } = await youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--flat-playlist", "--no-warnings", "--playlist-end", String(limit), ...ytdlpArgs(cfg, process.execPath, jar.path), target])));
+    await jar.commit().catch(() => undefined);
   } finally {
     await jar.cleanup();
   }
@@ -269,7 +287,9 @@ export async function probeYoutube(cfg: Config): Promise<{ status: YoutubeStatus
   const jar = await privateCookies(cfg);
   try {
     const r = await youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--simulate", ...ytdlpArgs(cfg, process.execPath, jar.path), YOUTUBE_PROBE_URL]));
-    return { status: classifyYoutubeProbe({ ok: true, stderr: r.stderr }), detail: r.stderr.split("\n").find((l) => /WARNING/.test(l))?.slice(0, 200) };
+    const status = classifyYoutubeProbe({ ok: true, stderr: r.stderr });
+    if (status === "ok") await jar.commit().catch(() => undefined); // the probe rotated the session too
+    return { status, detail: r.stderr.split("\n").find((l) => /WARNING/.test(l))?.slice(0, 200) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { status: classifyYoutubeProbe({ ok: false, stderr: message }), detail: message.slice(-200) };
