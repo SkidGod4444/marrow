@@ -77,8 +77,8 @@ describe("yt-dlp on a flagged host", () => {
       return "ok";
     };
     const waits: number[] = [];
-    expect(await withBotCheckRetry(flaky, { sleep: async (ms) => void waits.push(ms) })).toBe("ok");
-    expect([n, waits]).toEqual([3, [45_000, 90_000]]);
+    expect(await withBotCheckRetry(flaky, { attempts: 3, sleep: async (ms) => void waits.push(ms) })).toBe("ok");
+    expect([n, waits]).toEqual([3, [240_000, 240_000]]);
     n = 0;
     await expect(withBotCheckRetry(flaky, { attempts: 2, sleep: async () => undefined })).rejects.toThrow(/not a bot/);
     expect(n).toBe(2);

@@ -69,13 +69,13 @@ const explained = (cfg: YtdlpConfig, err: unknown): Error => {
 };
 
 /**
- * YouTube's bot check on cloud addresses comes and goes — the same request, same cookies, passes a minute later
- * (the failing run refreshes the session cookies). So a bot check is retried a couple of times before it fails the
- * stage; the broker's own retries (a minute apart, backing off) sit on top of this.
+ * YouTube's bot check on a cloud address is rate-driven: a handful of requests inside a minute and the address is
+ * flagged for several minutes; quiet, single requests from the same box with the same cookies pass. So a bot check
+ * is retried once, after a long pause, and the broker's own retries (5 min, then 10) sit on top of that.
  */
 export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; delaysMs?: number[]; sleep?: (ms: number) => Promise<void>; onRetry?: (attempt: number, err: Error) => void } = {}): Promise<T> {
-  const attempts = opts.attempts ?? 3;
-  const delays = opts.delaysMs ?? [45_000, 90_000];
+  const attempts = opts.attempts ?? 2;
+  const delays = opts.delaysMs ?? [240_000];
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let i = 0; ; i++) {
     try {
@@ -93,7 +93,7 @@ export async function withBotCheckRetry<T>(fn: () => Promise<T>, opts: { attempt
  * One yt-dlp call at a time per process, at least `gapMs` apart. Two workers plus retries once made six page requests
  * in two minutes and YouTube's bot check answered every one; spaced single requests from the same box pass.
  */
-export function makeGate(gapMs = 8_000, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)), now: () => number = Date.now) {
+export function makeGate(gapMs = 15_000, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)), now: () => number = Date.now) {
   let chain: Promise<unknown> = Promise.resolve();
   let last = Number.NEGATIVE_INFINITY;
   return <T>(fn: () => Promise<T>): Promise<T> => {
@@ -119,7 +119,7 @@ export async function fetchMetadata(cfg: Config, url: string, opts: { log?: (m: 
   const jar = await privateCookies(cfg);
   try {
     const { stdout } = await withBotCheckRetry(() => youtubeGate(() => exec(cfg.YTDLP_BIN, ["-J", "--no-playlist", "--no-warnings", ...ytdlpArgs(cfg, process.execPath, jar.path), url])), {
-      onRetry: (n) => opts.log?.(`YouTube bot check on metadata — retrying (${n}/2)`),
+      onRetry: (n) => opts.log?.(`YouTube bot check on metadata — waiting 4 min, then one more try (${n}/1)`),
     });
     return JSON.parse(stdout) as YtMeta;
   } catch (err) {
@@ -145,7 +145,7 @@ export async function download(cfg: Config, url: string, outDir: string, opts: {
             "-o", join(outDir, "source.%(ext)s"), url,
           ]),
         ),
-      { onRetry: (n) => opts.log?.(`YouTube bot check on download — retrying (${n}/2)`) },
+      { onRetry: (n) => opts.log?.(`YouTube bot check on download — waiting 4 min, then one more try (${n}/1)`) },
     );
   } catch (err) {
     opts.log?.(`yt-dlp: ${(err instanceof Error ? err.message : String(err)).slice(-300)}`);

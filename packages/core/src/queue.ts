@@ -38,23 +38,28 @@ export class PgBossQueue implements JobQueue {
     }
   }
   /**
-   * A fresh process has no workers yet, so any job the broker still shows as `active` belonged to a process that died
-   * mid-run (a deploy restart, a crash). Left alone it would sit there until it expires — an hour — before a retry.
-   * Cancel them now; `recoverJobs` re-sends whatever the jobs table says is unfinished, and the runner resumes at the
-   * interrupted stage.
+   * A fresh process starts from the jobs table's truth: every broker job still waiting, active or due for a retry is
+   * cancelled — an `active` one belonged to a process that died mid-run and would otherwise sit until it expires; a
+   * waiting or retrying one may be a duplicate from before the enqueue guard — and `recoverJobs` re-sends exactly the
+   * jobs the table says are unfinished, once each. The runner resumes at the interrupted stage.
    */
   private async releaseOrphans() {
-    const res = await this.boss.getDb().executeSql(`select id from pgboss.job where name = $1 and state = 'active'`, [INGEST_QUEUE]);
-    const ids = (res.rows as Array<{ id: string }>).map((r) => r.id);
-    if (ids.length) {
-      await this.boss.cancel(INGEST_QUEUE, ids);
-      console.log(`[pg-boss] released ${ids.length} job(s) left active by the previous process`);
+    const res = await this.boss.getDb().executeSql(`select id, state from pgboss.job where name = $1 and state in ('created', 'active', 'retry')`, [INGEST_QUEUE]);
+    const rows = res.rows as Array<{ id: string; state: string }>;
+    if (rows.length) {
+      await this.boss.cancel(
+        INGEST_QUEUE,
+        rows.map((r) => r.id),
+      );
+      console.log(`[pg-boss] cleared ${rows.length} broker job(s) left by the previous process (${rows.map((r) => r.state).join(", ")}); re-sending from the jobs table`);
     }
   }
   async enqueue(jobId: string) {
     // singletonKey: one broker job per pipeline job at a time. expireInSeconds bounds a hung stage (a stuck download)
     // before the job is retried; a normal hour-long video finishes well inside it.
-    await this.boss.send(INGEST_QUEUE, { jobId }, { singletonKey: jobId, retryLimit: 3, retryDelay: 60, retryBackoff: true, expireInSeconds: 3600 });
+    // Sparse retries: YouTube flags an address after a handful of requests in a minute and keeps it flagged for minutes,
+    // so quick retries only extend the flag. 5 min, then 10.
+    await this.boss.send(INGEST_QUEUE, { jobId }, { singletonKey: jobId, retryLimit: 2, retryDelay: 300, retryBackoff: true, expireInSeconds: 3600 });
   }
   async schedule(name: string, everyMinutes: number, fn: () => Promise<void>) {
     const m = Math.max(1, Math.min(59, Math.round(everyMinutes)));
