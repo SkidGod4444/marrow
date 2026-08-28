@@ -9,7 +9,7 @@ import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, ownerAc } from "better-auth/plugins/organization/access";
 import { apiKey } from "@better-auth/api-key";
 import { createHash } from "node:crypto";
-import { type Config, type Db, adoptOrphanNamespaces, authAccounts, authApiKeys, authInvitations, authMembers, authOrganizations, authSessions, authUsers, authVerifications, lastActiveOrganization, organizationCount, organizationsOf } from "@marrow/core";
+import { type Config, type Db, adoptOrphanNamespaces, authAccounts, authApiKeys, authInvitations, authMembers, authOrganizations, authSessions, authUsers, authVerifications, lastActiveOrganization, organizationCount, organizationsOf, getUser } from "@marrow/core";
 
 export type Auth = ReturnType<typeof createAuth>;
 
@@ -108,20 +108,20 @@ export function createAuth(db: Db, config: Config) {
       apiKey({ enableMetadata: true, defaultPrefix: "mrw_", rateLimit: { enabled: false } }),
     ],
     databaseHooks: {
-      user: {
-        create: {
-          after: async (user) => {
-            // Every account starts with a personal workspace.
-            const base = slugify(user.name || user.email.split("@")[0] || "workspace");
-            await auth.api.createOrganization({ body: { name: `${user.name || user.email.split("@")[0]}'s workspace`, slug: `${base}-${Math.random().toString(36).slice(2, 7)}`, userId: user.id } });
-          },
-        },
-      },
       session: {
         create: {
           before: async (session) => {
-            // Land in a workspace: the one created first (personal), unless the client sets another.
-            const orgs = await organizationsOf(db, session.userId);
+            // Land in a workspace. Every account gets a personal one the first time it signs in — which for a
+            // fresh sign-up is right now, and for an account from before workspaces existed is the upgrade path
+            // (the first workspace on an instance adopts the old library). One place, so sign-up and sign-in can't race.
+            let orgs = await organizationsOf(db, session.userId);
+            if (orgs.length === 0) {
+              const user = await getUser(db, session.userId);
+              if (user) {
+                await personalWorkspace(user);
+                orgs = await organizationsOf(db, session.userId);
+              }
+            }
             // Come back to the workspace used last time (if still a member); otherwise the first one.
             const last = await lastActiveOrganization(db, session.userId);
             const remembered = last && orgs.some((o) => o.id === last) ? last : null;
@@ -132,5 +132,11 @@ export function createAuth(db: Db, config: Config) {
     },
     advanced: { database: { generateId: ({ model }) => `${model === "organization" ? "org" : model === "user" ? "usr" : model.slice(0, 3)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}` } },
   });
+  /** "<name>'s workspace" with a unique slug; the creator becomes its owner. */
+  async function personalWorkspace(user: { id: string; name: string; email: string }) {
+    const label = user.name || user.email.split("@")[0] || "workspace";
+    const base = slugify(label);
+    await auth.api.createOrganization({ body: { name: `${label}'s workspace`, slug: `${base}-${Math.random().toString(36).slice(2, 7)}`, userId: user.id } });
+  }
   return auth;
 }

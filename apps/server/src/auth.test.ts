@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { InProcessQueue, createNamespace, testEnv } from "@marrow/core";
+import { InProcessQueue, createNamespace, testEnv, authMembers, authOrganizations } from "@marrow/core";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { permissionsOf, roleCan } from "./auth.ts";
@@ -121,6 +121,21 @@ describe("accounts, workspaces, roles (Better Auth)", () => {
     // instance key: operator, must say which workspace
     const inst = await body(await json("/namespaces", { key: "instance-key", headers: { "x-marrow-org": org } }));
     expect(inst.namespaces.map((n: { name: string }) => n.name)).toEqual(["robotics"]);
+  });
+
+  it("an account from before workspaces existed gets one at sign-in, and it adopts the old library", async () => {
+    await signUp("ada@example.com", "Ada");
+    // Simulate the upgrade: the account exists, no workspace does, and the library predates workspaces.
+    await env.db.delete(authMembers);
+    await env.db.delete(authOrganizations);
+    await createNamespace(env.db, { name: "legacy" });
+    const res = await json("/api/auth/sign-in/email", { method: "POST", body: JSON.stringify({ email: "ada@example.com", password: "correct horse battery" }) });
+    expect(res.status).toBe(200);
+    const me = await body(await json("/me", { cookie: cookieOf(res) }));
+    expect(me.organizations).toHaveLength(1);
+    expect(me.organizations[0]).toMatchObject({ role: "owner", name: "Ada's workspace" });
+    expect(me.active.id).toBe(me.organizations[0].id);
+    expect((await body(await json("/namespaces", { cookie: cookieOf(res) }))).namespaces.map((n: { name: string }) => n.name)).toEqual(["legacy"]);
   });
 
   it("the first workspace adopts namespaces created before multi-tenancy", async () => {

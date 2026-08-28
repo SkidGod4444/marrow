@@ -142,7 +142,7 @@ BETTER_AUTH_SECRET=<openssl rand -hex 32>
 
 Nothing changes on Vercel: the web app proxies `/api/auth/*` to the server, cookies stay on the web app's domain. The gate is `apps/web/proxy.ts` plus the `(app)` layout, and the API checks the role behind every route; `MARROW_AUTH=off` in the web app's env removes sign-in (local development only — never on Vercel). Until `MARROW_WEB_URL` and `BETTER_AUTH_SECRET` are set, the server derives a secret from `MARROW_API_KEY` and trusts the web proxy's origin, so a fresh deploy can still sign in. Changing the secret signs everyone out once.
 
-**Upgrading from the single-owner version:** namespaces created before workspaces existed have no workspace. The **first workspace created on the instance adopts them** — so the first account to sign up after the upgrade (its personal workspace is created on sign-up) owns the old library. Invite the others from Settings afterwards.
+**Upgrading from the single-owner version:** nothing to do. Sign in with the existing account — an account without a workspace gets its personal one at sign-in, and the **first workspace created on an instance adopts the namespaces from before** — so the old library is right there. Invite the others from Settings afterwards.
 
 `MARROW_API_KEY` stays the instance key for the CLI and operations; it acts in the workspace named by `x-marrow-org: <slug>`. People connecting Claude Code use their own key from Settings → API keys instead. Inbound e-mail routes to `INBOUND_EMAIL_NAMESPACE=<workspace-slug>/<namespace>`.
 
