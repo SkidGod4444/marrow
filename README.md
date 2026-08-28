@@ -15,7 +15,7 @@ The spec is `docs/PRD.mdx`; the technology choices are `docs/STACK.md`; every de
 
 - **Accounts, workspaces, roles** ✅ open sign-up, workspaces with viewer / member / admin / owner, invitation links, personal API keys, and a Settings page (members, invitations, namespaces, keys) — see below.
 
-All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast). Live runs need `OPENAI_API_KEY`.
+All six PRD phases are built and verified end to end (Vitest with fakes, Playwright against the whole app in fake mode, axe accessibility incl. colour contrast), and the pipeline has run for real in production (an 11-minute YouTube talk: fetch → transcribe → keyframes → vision → article → references → index for $0.09). Live runs need `OPENAI_API_KEY`; on a cloud box YouTube also wants a cookies file (`docs/DEPLOY.md`).
 
 ## Accounts, workspaces and roles
 
@@ -131,7 +131,7 @@ All routes except `/health`, `/auth/status` and `/api/auth/*` need a session coo
 
 ## Development
 
-Deploying: `docs/DEPLOY.md` (API on AWS behind Caddy, web on Vercel, push-to-deploy). `GET /health` on the API and `GET /api/version` on the web app report the commit they run, so `curl` answers whether the latest push is live.
+Deploying: `docs/DEPLOY.md` (API on AWS behind Caddy, web on Vercel, push-to-deploy). `GET /health` on the API reports the commit it runs, whether object storage works (`storage`) and the job queue (`queue`: queued / running / failed and how long); `GET /api/version` on the web app reports its commit — so `curl` answers "is the latest push live, and is the pipeline moving?".
 
 | Task | Command |
 |---|---|
