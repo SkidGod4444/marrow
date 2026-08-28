@@ -1,5 +1,6 @@
 import { htmlToText } from "./chat.ts";
 import { type CaptureDeps, type CaptureResult, createCapture } from "./capture.ts";
+import { getOrganization } from "./organizations.ts";
 
 // STACK:inbound_email — provider-agnostic. The provider's webhook posts one JSON document per mail; we accept
 // Postmark, CloudMailin, Resend/SendGrid-style and a plain generic shape, normalise to InboundEmail, and file it
@@ -48,23 +49,35 @@ export function normalizeInboundEmail(body: unknown): InboundEmail | null {
   return null;
 }
 
-/** `anything+<namespace>@host` → namespace; the first recipient with a plus-tag wins. */
+/** `anything+<workspace>.<namespace>@host` (or `+<namespace>` when the name is unique) → target; the first plus-tag wins. */
 export function namespaceFromRecipients(to: string[]): string | null {
   for (const t of to) {
-    const m = t.toLowerCase().match(/^[^<\s]*?\+([a-z0-9][a-z0-9-_]*)@/) ?? t.toLowerCase().match(/<[^+>]*\+([a-z0-9][a-z0-9-_]*)@/);
+    const m = t.toLowerCase().match(/^[^<\s]*?\+([a-z0-9][a-z0-9.\-_]*)@/) ?? t.toLowerCase().match(/<[^+>]*\+([a-z0-9][a-z0-9.\-_]*)@/);
     if (m) return m[1]!;
   }
   return null;
 }
 
-export async function captureEmail(deps: CaptureDeps, mail: InboundEmail, opts: { defaultNamespace?: string }): Promise<CaptureResult> {
-  const namespace = namespaceFromRecipients(mail.to) ?? opts.defaultNamespace;
-  if (!namespace) throw new Error("no namespace: address the mail to <anything>+<namespace>@… or set INBOUND_EMAIL_NAMESPACE");
+/** "workspace/namespace", "workspace.namespace" or a bare namespace name → { organizationId?, namespace }. */
+export async function resolveTarget(db: CaptureDeps["db"], target: string): Promise<{ organizationId?: string; namespace: string }> {
+  const [org, ns] = target.includes("/") ? target.split("/", 2) : target.includes(".") ? target.split(".", 2) : [null, target];
+  if (!ns) throw new Error(`bad target "${target}" — use workspace/namespace`);
+  if (!org) return { namespace: ns };
+  const o = await getOrganization(db, org);
+  if (!o) throw new Error(`workspace "${org}" not found`);
+  return { organizationId: o.id, namespace: ns };
+}
+
+export async function captureEmail(deps: CaptureDeps, mail: InboundEmail, opts: { defaultTarget?: string }): Promise<CaptureResult> {
+  const target = namespaceFromRecipients(mail.to) ?? opts.defaultTarget;
+  if (!target) throw new Error("no target: address the mail to <anything>+<workspace>.<namespace>@… or set INBOUND_EMAIL_NAMESPACE to workspace/namespace");
+  const { organizationId, namespace } = await resolveTarget(deps.db, target);
   const text = (mail.text.trim() || htmlToText(mail.html)).trim();
   if (text.length < 40) throw new Error("the email has no readable text");
   const id = mail.message_id.replace(/^<|>$/g, "");
   return createCapture(deps, {
     namespace,
+    organizationId,
     text,
     title: mail.subject || undefined,
     author: mail.from || undefined,

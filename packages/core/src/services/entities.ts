@@ -90,8 +90,8 @@ export type EntityLookup = {
   claims: { supports: EntityMention[]; opposes: EntityMention[]; neutral: EntityMention[] };
 };
 
-export async function lookupEntity(db: Db, input: { namespace: string; name: string }): Promise<{ result: EntityLookup | null; suggestions: string[] }> {
-  const ns = await getNamespace(db, input.namespace);
+export async function lookupEntity(db: Db, input: { namespace: string; organizationId?: string; name: string }): Promise<{ result: EntityLookup | null; suggestions: string[] }> {
+  const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const key = keyOf(input.name);
   let entity: Entity | undefined = (await db.select().from(entities).where(and(eq(entities.namespaceId, ns.id), eq(entities.nameKey, key))))[0];

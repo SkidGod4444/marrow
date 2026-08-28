@@ -22,7 +22,7 @@ export type SearchHit = {
   fts_rank: number | null;
 };
 
-export type SearchInput = { namespace: string; query: string; k?: number; sourceType?: string };
+export type SearchInput = { namespace: string; organizationId?: string; query: string; k?: number; sourceType?: string };
 
 export type SearchDeps = {
   db: Db;
@@ -41,7 +41,7 @@ const RRF_K = 60;
  */
 export async function search(deps: SearchDeps, input: SearchInput): Promise<{ namespace: { id: string; name: string }; hits: SearchHit[] }> {
   const { db, config } = deps;
-  const ns = await getNamespace(db, input.namespace);
+  const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const k = Math.max(1, Math.min(input.k ?? 8, 50));
   const n = k * config.SEARCH_OVERFETCH;

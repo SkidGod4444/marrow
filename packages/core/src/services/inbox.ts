@@ -7,10 +7,10 @@ import { getNamespace } from "./namespaces.ts";
 
 export type InboxEntry = Item & { namespace: { id: string; name: string }; job?: { id: string; stage: string | null; state: string; error: string | null } };
 
-export async function listInbox(db: Db, opts: { namespace?: string; includeArchived?: boolean; limit?: number } = {}): Promise<{ entries: InboxEntry[]; pending: InboxEntry[] }> {
-  const ns = opts.namespace ? await getNamespace(db, opts.namespace) : null;
+export async function listInbox(db: Db, opts: { organizationId?: string; namespace?: string; includeArchived?: boolean; limit?: number } = {}): Promise<{ entries: InboxEntry[]; pending: InboxEntry[] }> {
+  const ns = opts.namespace ? await getNamespace(db, opts.namespace, opts.organizationId) : null;
   if (opts.namespace && !ns) throw new Error(`namespace "${opts.namespace}" not found`);
-  const scope = ns ? eq(items.namespaceId, ns.id) : sql`true`;
+  const scope = ns ? eq(items.namespaceId, ns.id) : opts.organizationId ? eq(namespaces.organizationId, opts.organizationId) : sql`true`;
   const rows = await db
     .select({ item: items, ns: { id: namespaces.id, name: namespaces.name } })
     .from(items)
@@ -39,9 +39,9 @@ export async function listInbox(db: Db, opts: { namespace?: string; includeArchi
 }
 
 /** "Skip" archives the entry (and logs the `skipped` event, PRD §11); `archived = false` brings it back. */
-export async function archiveItem(db: Db, itemId: string, archived = true): Promise<Item | null> {
+export async function archiveItem(db: Db, itemId: string, archived = true, userId?: string): Promise<Item | null> {
   const [row] = await db.update(items).set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() }).where(eq(items.id, itemId)).returning();
   if (!row) return null;
-  if (archived) await logEvent(db, itemId, "skipped");
+  if (archived) await logEvent(db, itemId, "skipped", userId);
   return row;
 }

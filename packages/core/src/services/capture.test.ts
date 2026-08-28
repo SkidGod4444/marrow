@@ -148,7 +148,7 @@ describe("POST /capture → text document → segments", () => {
     expect(redelivered.reused).toBe(true);
     const generic = normalizeInboundEmail({ from: "a@b.c", to: "inbox@in.example.com", subject: "Hi", html: "<p>Some html body that is long enough to be captured as text here.</p>" });
     await expect(captureEmail(deps(), generic!, {})).rejects.toThrow(/namespace/);
-    const viaDefault = await captureEmail(deps(), generic!, { defaultNamespace: "posts" });
+    const viaDefault = await captureEmail(deps(), generic!, { defaultTarget: "posts" });
     expect(viaDefault.item.sourceType).toBe("newsletter");
     expect(normalizeInboundEmail({ hello: 1 })).toBe(null);
   });

@@ -18,6 +18,7 @@ import { getNamespace } from "./namespaces.ts";
 
 export type CaptureInput = {
   namespace: string;
+  organizationId?: string;
   url?: string;
   text?: string;
   title?: string;
@@ -49,7 +50,7 @@ export function textSourceUrl(text: string): string {
 
 export async function createCapture(deps: CaptureDeps, input: CaptureInput): Promise<CaptureResult> {
   const { db, storage } = deps;
-  const ns = await getNamespace(db, input.namespace);
+  const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const text = input.text?.trim() ?? "";
   const rawUrl = input.url?.trim() ?? "";

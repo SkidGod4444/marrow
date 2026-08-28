@@ -1,27 +1,80 @@
-// Owner login for the web app — Better Auth (https://better-auth.com) running inside the API server on our Postgres.
-// Email + password only; sign-up closes after the first account (Marrow is single-owner, PRD §2). The web app proxies
-// /api/auth/* here and gates its pages on the session; MCP and CLI keep using the API key.
+// Accounts, workspaces and API keys — Better Auth (https://better-auth.com) running inside the API server on our
+// Postgres. Owner decision 2026-08-28: Marrow is a multi-tenant SaaS. Users sign up freely, every user gets a personal
+// workspace, workspaces have members with roles (owner / admin / member / viewer) checked by the permission matrix
+// below, and members mint per-user API keys (bound to one workspace) for MCP/CLI. The web app proxies /api/auth/*.
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { organization } from "better-auth/plugins";
+import { createAccessControl } from "better-auth/plugins/access";
+import { adminAc, defaultStatements, ownerAc } from "better-auth/plugins/organization/access";
+import { apiKey } from "@better-auth/api-key";
 import { createHash } from "node:crypto";
-import { type Config, type Db, authAccounts, authSessions, authUsers, authVerifications, hasOwner } from "@marrow/core";
+import { type Config, type Db, adoptOrphanNamespaces, authAccounts, authApiKeys, authInvitations, authMembers, authOrganizations, authSessions, authUsers, authVerifications, organizationCount, organizationsOf } from "@marrow/core";
 
 export type Auth = ReturnType<typeof createAuth>;
 
+// ---- Permission matrix (resource → actions). Better Auth's own member/invitation/organization statements are kept. ----
+export const statement = {
+  ...defaultStatements,
+  namespace: ["read", "create", "update", "delete"],
+  item: ["read", "add", "archive", "delete"], // add = ingest / capture / follow-poll results
+  source: ["read", "follow", "unfollow", "poll"],
+  chat: ["use"],
+  practice: ["use"],
+  apikey: ["manage"],
+} as const;
+export const ac = createAccessControl(statement);
+export const roles = {
+  viewer: ac.newRole({ namespace: ["read"], item: ["read"], source: ["read"], practice: ["use"] }),
+  member: ac.newRole({ namespace: ["read"], item: ["read", "add", "archive"], source: ["read", "follow", "unfollow", "poll"], chat: ["use"], practice: ["use"], apikey: ["manage"] }),
+  admin: ac.newRole({
+    ...adminAc.statements,
+    namespace: ["read", "create", "update", "delete"],
+    item: ["read", "add", "archive", "delete"],
+    source: ["read", "follow", "unfollow", "poll"],
+    chat: ["use"],
+    practice: ["use"],
+    apikey: ["manage"],
+  }),
+  owner: ac.newRole({
+    ...ownerAc.statements,
+    namespace: ["read", "create", "update", "delete"],
+    item: ["read", "add", "archive", "delete"],
+    source: ["read", "follow", "unfollow", "poll"],
+    chat: ["use"],
+    practice: ["use"],
+    apikey: ["manage"],
+  }),
+};
+export type RoleName = keyof typeof roles;
+export type Resource = keyof typeof statement;
+export type Action<R extends Resource> = (typeof statement)[R][number];
+
+export function roleCan<R extends Resource>(role: string, resource: R, action: Action<R>): boolean {
+  const r = roles[role as RoleName];
+  if (!r) return false;
+  return r.authorize({ [resource]: [action] } as never).success;
+}
+
+/** Everything a role may do, as "resource:action" strings — sent to the web app to shape the UI. */
+export function permissionsOf(role: string): string[] {
+  const out: string[] = [];
+  for (const [resource, actions] of Object.entries(statement)) for (const action of actions) if (roleCan(role, resource as Resource, action as never)) out.push(`${resource}:${action}`);
+  return out;
+}
+
+const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "workspace";
+
 export function createAuth(db: Db, config: Config) {
   const web = config.MARROW_WEB_URL.replace(/\/$/, "");
-  // A deploy must never lock the owner out: without BETTER_AUTH_SECRET, derive a stable secret from the API key
-  // (already a long random value on the box). Setting BETTER_AUTH_SECRET later invalidates existing sessions only.
+  // A deploy must never lock people out: without BETTER_AUTH_SECRET, derive a stable secret from the instance key.
   const secret = config.BETTER_AUTH_SECRET ?? (config.MARROW_API_KEY ? createHash("sha256").update(`marrow-auth:${config.MARROW_API_KEY}`).digest("hex") : "marrow-dev-secret-not-for-production");
-  return betterAuth({
+
+  const auth = betterAuth({
     appName: "Marrow",
-    // Requests reach us through the web app's proxy, so the browser-facing origin is the web app's.
-    baseURL: web,
+    baseURL: web, // the browser only ever talks to the web app, which proxies /api/auth here
     basePath: "/api/auth",
     secret,
-    // CSRF: the configured web origin, local dev, and — because the web app's proxy identifies itself with the API
-    // key — whatever origin that proxy reports, so a fresh deploy works before MARROW_WEB_URL is set.
     trustedOrigins: (request) => {
       const origins = [web, "http://localhost:3000", "http://localhost:3100"];
       const origin = request?.headers.get("origin");
@@ -29,27 +82,51 @@ export function createAuth(db: Db, config: Config) {
       if (origin && key && config.MARROW_API_KEY && key === config.MARROW_API_KEY) origins.push(origin);
       return origins;
     },
-    database: drizzleAdapter(db, { provider: "pg", schema: { user: authUsers, session: authSessions, account: authAccounts, verification: authVerifications } }),
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: { user: authUsers, session: authSessions, account: authAccounts, verification: authVerifications, organization: authOrganizations, member: authMembers, invitation: authInvitations, apikey: authApiKeys },
+    }),
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24, cookieCache: { enabled: true, maxAge: 5 * 60 } },
+    plugins: [
+      organization({
+        ac,
+        roles,
+        creatorRole: "owner",
+        allowUserToCreateOrganization: true,
+        invitationExpiresIn: 60 * 60 * 24 * 7,
+        // No mail provider in the stack: the inviter copies the link from the members page.
+        sendInvitationEmail: async () => undefined,
+        organizationHooks: {
+          afterCreateOrganization: async ({ organization: org }) => {
+            // The very first workspace inherits everything created before multi-tenancy.
+            if ((await organizationCount(db)) === 1) await adoptOrphanNamespaces(db, org.id);
+          },
+        },
+      }),
+      apiKey({ enableMetadata: true, defaultPrefix: "mrw_", rateLimit: { enabled: false } }),
+    ],
     databaseHooks: {
       user: {
         create: {
-          before: async () => {
-            if (await hasOwner(db)) throw new APIError("FORBIDDEN", { message: "Marrow is single-owner: the owner account already exists. Sign in instead." });
+          after: async (user) => {
+            // Every account starts with a personal workspace.
+            const base = slugify(user.name || user.email.split("@")[0] || "workspace");
+            await auth.api.createOrganization({ body: { name: `${user.name || user.email.split("@")[0]}'s workspace`, slug: `${base}-${Math.random().toString(36).slice(2, 7)}`, userId: user.id } });
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session) => {
+            // Land in a workspace: the one created first (personal), unless the client sets another.
+            const orgs = await organizationsOf(db, session.userId);
+            return { data: { ...session, activeOrganizationId: orgs[0]?.id ?? null } };
           },
         },
       },
     },
-    advanced: { database: { generateId: () => `usr_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}` } },
+    advanced: { database: { generateId: ({ model }) => `${model === "organization" ? "org" : model === "user" ? "usr" : model.slice(0, 3)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}` } },
   });
-}
-
-/** The session behind a request's cookies, or null. */
-export async function sessionOf(auth: Auth, headers: Headers) {
-  try {
-    return await auth.api.getSession({ headers });
-  } catch {
-    return null;
-  }
+  return auth;
 }

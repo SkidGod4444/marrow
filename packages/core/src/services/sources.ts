@@ -47,8 +47,8 @@ export function normalizeSourceUrl(url: string, kind: SourceKind): string {
   return u.toString();
 }
 
-export async function addSource(db: Db, input: { namespace: string; url: string; kind?: SourceKind; title?: string }): Promise<{ source: Source; created: boolean }> {
-  const ns = await getNamespace(db, input.namespace);
+export async function addSource(db: Db, input: { namespace: string; organizationId?: string; url: string; kind?: SourceKind; title?: string }): Promise<{ source: Source; created: boolean }> {
+  const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const kind = input.kind ?? inferSourceKind(input.url);
   const url = normalizeSourceUrl(input.url, kind);

@@ -32,8 +32,8 @@ export type NamespaceGraph = {
 };
 
 /** PRD §8 `get_graph` / `GET /namespaces/:ref/graph`. Keeps the `maxEntities` most-mentioned entities. */
-export async function getNamespaceGraph(db: Db, ref: string, opts: { maxEntities?: number } = {}): Promise<NamespaceGraph> {
-  const ns = await getNamespace(db, ref);
+export async function getNamespaceGraph(db: Db, ref: string, opts: { maxEntities?: number; organizationId?: string } = {}): Promise<NamespaceGraph> {
+  const ns = await getNamespace(db, ref, opts.organizationId);
   if (!ns) throw new Error(`namespace "${ref}" not found`);
   const maxEntities = Math.max(1, Math.min(opts.maxEntities ?? 150, 1000));
 

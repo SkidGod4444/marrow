@@ -22,8 +22,8 @@ export function inferSourceType(url: string): SourceType {
  * PRD §5 idempotency: one item per (namespace, source_url). A `ready` item is returned as-is unless `force`,
  * which starts a new job at version+1 (derived artifacts are replaced). A failed/queued item resumes its latest job.
  */
-export async function createIngest(db: Db, input: { namespace: string; url: string; sourceType?: SourceType; force?: boolean }): Promise<IngestResult> {
-  const ns = await getNamespace(db, input.namespace);
+export async function createIngest(db: Db, input: { namespace: string; organizationId?: string; url: string; sourceType?: SourceType; force?: boolean }): Promise<IngestResult> {
+  const ns = await getNamespace(db, input.namespace, input.organizationId);
   if (!ns) throw new Error(`namespace "${input.namespace}" not found`);
   const sourceUrl = canonicalizeSourceUrl(input.url);
   const sourceType = input.sourceType ?? inferSourceType(sourceUrl);

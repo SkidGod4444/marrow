@@ -2,13 +2,13 @@ import { parseArgs } from "node:util";
 import { writeFile } from "node:fs/promises";
 import {
   STAGE_NAMES, type StageName, createCapture, createDb, databaseSsl, createIngest, createNamespace, createProviders, createStorage, getItem,
-  getJobStatus, getNamespace, listItems, listNamespaces, loadConfig, loadDocument, runJob,
+  getJobStatus, getNamespace, getOrganization, listItems, listNamespaces, loadConfig, loadDocument, runJob,
 } from "@marrow/core";
 
 const HELP = `marrow — CLI
 
-  bun run cli ns create <name> [--description "…"] [--language-learning] [--diarize]
-  bun run cli ns list
+  bun run cli ns create <name> [--org <workspace-slug>] [--description "…"] [--language-learning] [--diarize]
+  bun run cli ns list [--org <workspace-slug>]
   bun run cli ingest <youtube-url> --ns <name> [--force] [--stages fetch,transcribe,…]
   bun run cli capture <url | -> --ns <name> [--title "…"] [--author "…"] [--note "…"]   (- reads the text from stdin)
   bun run cli job <job_id>
@@ -22,6 +22,7 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     ns: { type: "string" },
+    org: { type: "string" },
     description: { type: "string", default: "" },
     "language-learning": { type: "boolean", default: false },
     diarize: { type: "boolean", default: false },
@@ -51,6 +52,9 @@ function needNs(): string {
   if (!values.ns) throw new Error("--ns <namespace> is required");
   return values.ns;
 }
+// Workspace scope: --org <slug> (multi-tenant); without it, only namespaces with a unique name / no workspace resolve.
+const organizationId = values.org ? (await getOrganization(db, values.org))?.id : undefined;
+if (values.org && !organizationId) throw new Error(`workspace "${values.org}" not found`);
 
 const route = cmd === "ns" ? `ns ${sub ?? ""}`.trim() : cmd;
 
@@ -59,12 +63,12 @@ try {
     case "ns create": {
       const name = rest[0];
       if (!name) throw new Error("ns create <name>");
-      const ns = await createNamespace(db, { name, description: values.description, flags: { language_learning: values["language-learning"], ...(values.diarize ? { diarize: true } : {}) } });
+      const ns = await createNamespace(db, { organizationId, name, description: values.description, flags: { language_learning: values["language-learning"], ...(values.diarize ? { diarize: true } : {}) } });
       console.log(`created namespace ${ns.name} (${ns.id})`);
       break;
     }
     case "ns list": {
-      const rows = await listNamespaces(db);
+      const rows = await listNamespaces(db, organizationId);
       if (!rows.length) console.log("(no namespaces)");
       for (const r of rows) console.log(`${r.name.padEnd(24)} ${String(r.readyCount).padStart(3)}/${String(r.itemCount).padEnd(3)} ready  ${r.id}  ${r.description}`);
       break;
@@ -78,7 +82,7 @@ try {
       break;
     }
     case "items": {
-      const ns = await getNamespace(db, needNs());
+      const ns = await getNamespace(db, needNs(), organizationId);
       if (!ns) throw new Error(`namespace ${values.ns} not found`);
       const rows = await listItems(db, ns.id, values.status);
       if (!rows.length) console.log("(no items)");
@@ -103,7 +107,7 @@ try {
       if (!arg) throw new Error("capture <url | -> --ns <namespace>");
       const text = arg === "-" ? (await Bun.stdin.text()).trim() : undefined;
       const providers = createProviders(config);
-      const res = await createCapture({ db, storage, fetchPage: providers.fetchPage }, { namespace: needNs(), url: arg === "-" ? undefined : arg, text, title: values.title, author: values.author, note: values.note, force: values.force });
+      const res = await createCapture({ db, storage, fetchPage: providers.fetchPage }, { namespace: needNs(), organizationId, url: arg === "-" ? undefined : arg, text, title: values.title, author: values.author, note: values.note, force: values.force });
       console.log(`${res.reused ? "resuming" : "created"} ${res.item.sourceType} ${res.item.id} — ${res.item.title}`);
       if (res.linked_videos.length) console.log(`linked videos: ${res.linked_videos.join(", ")}${res.queued_videos.length ? " (queued)" : " (namespace flag auto_ingest_links is off — ingest them by hand)"}`);
       if (res.reused && res.job.state === "done") {
@@ -121,7 +125,7 @@ try {
       if (!url) throw new Error("ingest <url> --ns <namespace>");
       const stages = values.stages?.split(",").map((s) => s.trim()).filter(Boolean) as StageName[] | undefined;
       for (const s of stages ?? []) if (!STAGE_NAMES.includes(s)) throw new Error(`unknown stage "${s}" (valid: ${STAGE_NAMES.join(", ")})`);
-      const res = await createIngest(db, { namespace: needNs(), url, force: values.force });
+      const res = await createIngest(db, { namespace: needNs(), organizationId, url, force: values.force });
       console.log(`${res.reused ? "resuming" : "created"} job ${res.job.id} for item ${res.item.id}`);
       if (res.reused && res.job.state === "done" && !stages) {
         console.log("item is already ready — use --force to re-ingest or --stages to re-run specific stages");

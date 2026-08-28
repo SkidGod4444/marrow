@@ -102,8 +102,8 @@ export async function exportItemMarkdown(deps: { db: Db; storage: Storage }, ite
 }
 
 /** `export_markdown(namespace_id)`: an index note — every ready item with its summary, plus the entity index. */
-export async function exportNamespaceMarkdown(deps: { db: Db; storage: Storage }, ref: string): Promise<string | null> {
-  const ns = await getNamespace(deps.db, ref);
+export async function exportNamespaceMarkdown(deps: { db: Db; storage: Storage }, ref: string, organizationId?: string): Promise<string | null> {
+  const ns = await getNamespace(deps.db, ref, organizationId);
   if (!ns) return null;
   const out: string[] = [`# ${ns.name}`, ""];
   if (ns.description) out.push(ns.description, "");
