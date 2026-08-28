@@ -18,8 +18,12 @@ export type YtMeta = {
 };
 
 /** Flags every yt-dlp call gets: cookies / proxy for hosts YouTube flags, plus anything the operator appends. */
-export function ytdlpArgs(cfg: Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS">): string[] {
+export function ytdlpArgs(cfg: Pick<Config, "YTDLP_COOKIES" | "YTDLP_PROXY" | "YTDLP_EXTRA_ARGS">, jsRuntime: string | null = process.execPath): string[] {
   const out: string[] = [];
+  // YouTube streams need yt-dlp's JS challenge solver, which needs a JS runtime; only Deno is enabled by default and a
+  // bare box has none — "n challenge solving failed", only image formats. Bun is always here (it runs Marrow), so enable
+  // it as a fallback; Deno, when installed (the Docker image has it), is preferred automatically.
+  if (jsRuntime) out.push("--js-runtimes", `bun:${jsRuntime}`);
   if (cfg.YTDLP_COOKIES) out.push("--cookies", cfg.YTDLP_COOKIES);
   if (cfg.YTDLP_PROXY) out.push("--proxy", cfg.YTDLP_PROXY);
   if (cfg.YTDLP_EXTRA_ARGS?.trim()) out.push(...cfg.YTDLP_EXTRA_ARGS.trim().split(/\s+/));

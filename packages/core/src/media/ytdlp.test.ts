@@ -18,10 +18,12 @@ import { explainYtdlpError, ytdlpArgs } from "./ytdlp.ts";
 
 describe("yt-dlp on a flagged host", () => {
   it("passes cookies, proxy and extra args through to every call", () => {
-    expect(ytdlpArgs({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined })).toEqual([]);
-    expect(ytdlpArgs({ YTDLP_COOKIES: "/secrets/youtube-cookies.txt", YTDLP_PROXY: "http://proxy:3128", YTDLP_EXTRA_ARGS: " --extractor-args youtube:player_client=tv " })).toEqual([
+    expect(ytdlpArgs({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined }, null)).toEqual([]);
+    expect(ytdlpArgs({ YTDLP_COOKIES: "/secrets/youtube-cookies.txt", YTDLP_PROXY: "http://proxy:3128", YTDLP_EXTRA_ARGS: " --extractor-args youtube:player_client=tv " }, null)).toEqual([
       "--cookies", "/secrets/youtube-cookies.txt", "--proxy", "http://proxy:3128", "--extractor-args", "youtube:player_client=tv",
     ]);
+    // the JS runtime yt-dlp needs for YouTube's challenge solver: Bun itself, by default
+    expect(ytdlpArgs({ YTDLP_COOKIES: undefined, YTDLP_PROXY: undefined, YTDLP_EXTRA_ARGS: undefined }, "/usr/local/bin/bun")).toEqual(["--js-runtimes", "bun:/usr/local/bin/bun"]);
   });
   it("turns the bot check and other known refusals into sentences, and leaves the rest alone", () => {
     expect(explainYtdlpError("yt-dlp -J … exited 1: ERROR: [youtube] LaULblUJfxA: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication.")).toMatch(/cookies file or a proxy/);

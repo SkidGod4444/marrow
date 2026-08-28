@@ -2,9 +2,11 @@
 FROM oven/bun:1-debian AS base
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg python3 ca-certificates curl \
+ && apt-get install -y --no-install-recommends ffmpeg python3 ca-certificates curl unzip \
  && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
  && chmod a+rx /usr/local/bin/yt-dlp \
+ # Deno: the JS runtime yt-dlp's YouTube challenge solver supports first-class (Bun is enabled as a fallback by the wrapper).
+ && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- --no-modify-path >/dev/null \
  # Amazon RDS CA bundle so TLS to RDS is verified (DATABASE_SSL=auto picks it up when present).
  && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem \
  && rm -rf /var/lib/apt/lists/*

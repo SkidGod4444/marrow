@@ -162,6 +162,8 @@ YouTube flags cloud addresses: from the EC2 box every `yt-dlp` client gets `Sign
    ```
 3. In the box's `.env`: `YTDLP_COOKIES=/secrets/youtube-cookies.txt`, then `FORCE=1 ./scripts/deploy-ec2.sh`. Press **Retry** on the card.
 
+**Streams need a JavaScript runtime too.** Since late 2025 yt-dlp solves YouTube's signature/"n" challenge with a bundled script that needs Deno (or Bun/Node); without one it says *n challenge solving failed* and offers only image formats — "Requested format is not available". The Docker image ships Deno, and the server always enables Bun as a fallback, so nothing to configure. On a dev machine with Homebrew's yt-dlp the same applies: Bun is enabled automatically.
+
 Alternatives: `YTDLP_PROXY=http://user:pass@host:port` routes yt-dlp through a residential/other proxy (no cookies needed if that address isn't flagged); `YTDLP_EXTRA_ARGS` appends anything else yt-dlp wants (for instance a PO-token provider later). Test from the box: `docker compose -f docker-compose.prod.yml exec server yt-dlp -J --no-playlist --cookies /secrets/youtube-cookies.txt <url> | head -c 200`. Marrow still never automates a login — this is you exporting your own session once.
 
 ### The box: memory, swap, and how many jobs at once
