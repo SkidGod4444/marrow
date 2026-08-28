@@ -187,12 +187,25 @@
   summary,
   select,
   label[for],
+  [role="link"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="switch"],
+  [role="radio"],
   [data-slot="select-trigger"],
+  [data-slot="select-item"],
   [data-slot="tabs-trigger"],
   [data-slot="dropdown-menu-item"],
-  [data-slot="command-item"] {
+  [data-slot="command-item"],
+  [data-slot="slider-track"] {
     cursor: pointer;
   }
+  /* Component classes live in the utilities layer and would beat this base rule — so components/ui/* never set
+     cursor-default on a clickable; e2e/cursor.spec.ts audits every page for stragglers. */
   button:disabled,
   [aria-disabled="true"] {
     cursor: not-allowed;
