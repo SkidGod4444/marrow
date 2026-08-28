@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import Link from "next/link";
@@ -50,6 +51,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               {children}
             </main>
             <Toaster position="bottom-right" />
+            {/* Vercel Web Analytics — page views only; no-op outside Vercel (local, E2E). */}
+            <Analytics />
           </TooltipProvider>
         </ThemeProvider>
       </body>
