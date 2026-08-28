@@ -1,0 +1,13 @@
+{
+  "name": "@marrow/keeper",
+  "private": true,
+  "type": "module",
+  "description": "Cookie keeper: a headless Chromium that owns the YouTube session on the server and keeps yt-dlp's cookie jar fresh.",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

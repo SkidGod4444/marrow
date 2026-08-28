@@ -30,6 +30,7 @@ export function createApp(deps: AppDeps) {
       // Can it store things, and is the pipeline moving? Counts and states only — safe to read without a key.
       storage: deps.health?.storage() ?? "unknown",
       youtube: deps.health?.youtube?.() ?? "unknown", // ok | cookies_stale | blocked | error | unconfigured — from a 6-hourly probe
+      youtube_session: (await deps.health?.keeper?.()) ?? null, // the cookie keeper's last report, when one runs
       queue: { driver: deps.config.DATABASE_URL ? "pg-boss" : "in-process", ...(await queueStats(deps.db)) },
     }),
   );

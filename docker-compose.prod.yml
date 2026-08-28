@@ -12,6 +12,7 @@ services:
       STORAGE_DRIVER: s3
       WORK_DIR: /data/work
       YTDLP_POT_PROVIDER_URL: http://pot-provider:4416 # PO tokens for YouTube (see the service below)
+      KEEPER_STATUS: /secrets/keeper-status.json # the cookie keeper's report, shown on /health as youtube_session
     volumes:
       - workdata:/data
       - ./secrets:/secrets:ro # yt-dlp works on a private copy per run; the owner's file is never rewritten (docs/DEPLOY.md)
@@ -29,6 +30,18 @@ services:
     restart: unless-stopped
     expose: ["4416"]
 
+  # The cookie keeper: a headless Chromium that owns the YouTube session and rewrites secrets/youtube-cookies.txt every
+  # hour (docs/DEPLOY.md → "YouTube blocks the server"). Seed it once with an export from a private window.
+  cookie-keeper:
+    build: { context: ., dockerfile: docker/keeper.Dockerfile }
+    restart: unless-stopped
+    volumes:
+      - ./secrets:/secrets
+      - keeperdata:/data
+    environment:
+      KEEPER_INTERVAL_MINUTES: 60
+    mem_limit: 900m
+
   caddy:
     image: caddy:2
     ports: ["80:80", "443:443"]
@@ -43,5 +56,6 @@ services:
 
 volumes:
   workdata:
+  keeperdata:
   caddydata:
   caddyconfig:

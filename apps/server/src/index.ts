@@ -68,7 +68,17 @@ const checkYoutube = async () => {
 };
 void checkYoutube().catch((e) => console.error("[youtube] probe failed:", e));
 setInterval(() => void checkYoutube().catch(() => undefined), 6 * 60 * 60_000).unref();
-const health = { storage: () => storageStatus, youtube: () => youtubeStatus };
+// The cookie keeper (docker-compose.prod.yml) writes its report next to the jar; surface it as it is.
+const keeperStatus = async () => {
+  const path = process.env.KEEPER_STATUS;
+  if (!path) return null;
+  try {
+    return JSON.parse(await Bun.file(path).text()) as unknown;
+  } catch {
+    return null;
+  }
+};
+const health = { storage: () => storageStatus, youtube: () => youtubeStatus, keeper: keeperStatus };
 const deps = fakeDeps ? { db, storage, config, queue, auth, health, ...fakeDeps } : { db, storage, config, queue, auth, health, ...realRetrieval(config) };
 const app = createApp(deps);
 
