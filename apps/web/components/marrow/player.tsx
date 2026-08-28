@@ -97,7 +97,7 @@ export function youtubeId(url: string): string | null {
   }
 }
 
-const HostContext = createContext<{ hostRef: React.RefObject<HTMLDivElement | null>; frameRef: React.RefObject<HTMLDivElement | null>; videoId: string | null; audioSrc: string | null } | null>(null);
+const HostContext = createContext<{ hostRef: React.RefObject<HTMLDivElement | null>; frameRef: React.RefObject<HTMLDivElement | null>; videoId: string | null; audioSrc: string | null; mediaBase: string } | null>(null);
 
 /** What the provider drives: the YouTube iframe or an <audio> element (podcast episodes) — same API for the rest of the app. */
 type Backend = {
@@ -131,7 +131,7 @@ export function PlayerFrame({ className = "", collapsed = false, frames = [] }: 
   const still = (() => {
     if (!frames.length) return poster;
     const nearest = frames.reduce((b, f) => (Math.abs(f.t - p.currentTime) < Math.abs(b.t - p.currentTime) ? f : b));
-    return `/api/marrow/frames/${nearest.id}`;
+    return `${host.mediaBase}/frames/${nearest.id}`;
   })();
   const showPoster = Boolean(host.videoId) && !p.started; // covers cued + initial buffering (YouTube shows its chrome there)
   const showPaused = Boolean(host.videoId) && p.started && !p.playing && !p.buffering;
@@ -198,7 +198,7 @@ function AudioFrame({ className = "", collapsed = false }: { className?: string;
   );
 }
 
-export function PlayerProvider({ videoId, audioSrc = null, initialT = null, children }: { videoId: string | null; audioSrc?: string | null; initialT?: number | null; children: React.ReactNode }) {
+export function PlayerProvider({ videoId, audioSrc = null, initialT = null, mediaBase = "/api/marrow", children }: { videoId: string | null; audioSrc?: string | null; initialT?: number | null; /** where frames/audio come from: the signed-in proxy, or its public twin on share pages */ mediaBase?: string; children: React.ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Backend | null>(null);
@@ -408,7 +408,7 @@ export function PlayerProvider({ videoId, audioSrc = null, initialT = null, chil
     () => ({ seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, hasVideo: Boolean(videoId || audioSrc) }),
     [seekTo, seekBy, getCurrentTime, toggle, play, pause, setRate, toggleMute, fullscreen, currentTime, duration, playing, buffering, started, ended, muted, rate, ready, videoId, audioSrc],
   );
-  const hostValue = useMemo(() => ({ hostRef, frameRef, videoId, audioSrc }), [videoId, audioSrc]);
+  const hostValue = useMemo(() => ({ hostRef, frameRef, videoId, audioSrc, mediaBase }), [videoId, audioSrc, mediaBase]);
   return (
     <PlayerContext.Provider value={api}>
       <HostContext.Provider value={hostValue}>{children}</HostContext.Provider>

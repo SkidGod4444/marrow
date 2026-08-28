@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   applicationName: "Marrow",
   openGraph: { type: "website", siteName: "Marrow", title: "Marrow", description: "Turn talks, lectures and podcasts into searchable, citable knowledge.", locale: "en_US" },
   twitter: { card: "summary_large_image", title: "Marrow", description: "Turn talks, lectures and podcasts into searchable, citable knowledge." },
-  robots: { index: false, follow: false }, // single-owner tool; keep it out of search engines
+  robots: { index: false, follow: false }, // the app is private; share pages, login and signup opt in (lib/seo.ts, app/robots.ts)
 };
 
 export const viewport = { themeColor: "#111111", colorScheme: "dark" as const };

@@ -11,11 +11,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
  * One Share control for both the Reader tab and the shared page: copy the shareable link (the text version of the
  * item, /items/<id>/read), open it, copy as markdown, download .md/.txt, print to PDF (on the shared page).
  */
-export function ShareMenu({ itemId, title, onSharedPage = false, size = "sm" }: { itemId: string; title: string; onSharedPage?: boolean; size?: "sm" | "xs" }) {
+export function ShareMenu({ itemId, title, onSharedPage = false, size = "sm", apiBase = "/api/marrow" }: { itemId: string; title: string; onSharedPage?: boolean; size?: "sm" | "xs"; apiBase?: string }) {
   const [copied, setCopied] = useState<string | null>(null);
   const sharedPath = `/items/${itemId}/read`;
-  const md = `/api/marrow/items/${itemId}/export.md?transcript=1`;
-  const txt = `/api/marrow/items/${itemId}/export.txt`;
+  const md = `${apiBase}/items/${itemId}/export.md?transcript=1`;
+  const txt = `${apiBase}/items/${itemId}/export.txt`;
   const safe = (title || itemId).replace(/[^\w.-]+/g, "-").slice(0, 60);
 
   const flash = (what: string, message: string) => {

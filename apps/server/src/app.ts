@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage } from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats, itemUsage, listPublicItems, type Item } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -55,6 +55,68 @@ export function createApp(deps: AppDeps) {
       console.warn(`[inbound email] dropped: ${(err as Error).message}`);
       return c.json({ ok: false, dropped: (err as Error).message }, 200);
     }
+  });
+
+  // ---- Media helpers shared by the signed-in and the public routes ----
+  const serveAudio = async (c: Context<Env>, item: Item, cacheControl: string) => {
+    const key = audioKey(item.id);
+    if (!(await deps.storage.exists(key))) return c.json({ error: "no audio for this item" }, 404);
+    const bytes = await deps.storage.get(key);
+    const type = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 ? "audio/wav" : "audio/ogg"; // RIFF → WAV (fakes), else Opus/OGG
+    const range = c.req.header("range");
+    const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+    if (m && (m[1] || m[2])) {
+      const start = m[1] ? Number(m[1]) : Math.max(0, bytes.byteLength - Number(m[2]));
+      const end = m[1] && m[2] ? Math.min(Number(m[2]), bytes.byteLength - 1) : bytes.byteLength - 1;
+      if (start > end || start >= bytes.byteLength) return c.body(null, 416, { "content-range": `bytes */${bytes.byteLength}` });
+      return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": cacheControl });
+    }
+    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": type, "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": cacheControl });
+  };
+  const frameResponse = (f: NonNullable<Awaited<ReturnType<typeof getFrame>>>, cacheControl: string) => {
+    return new Response(Buffer.from(f.data), { status: 200, headers: { "content-type": f.mimeType, "cache-control": cacheControl, "x-frame-t": String(f.frame.t) } });
+  };
+  /** A ready item, or null — the only gate on the public share pages (PRD §6.2 sharing). */
+  const publicItem = async (id: string) => {
+    const item = await getItem(deps.db, id);
+    return item && item.status === "ready" ? item : null;
+  };
+
+  // ---- Public share pages: read-only, ready items only, no key (the web app's /items/:id/read and its sitemap) ----
+  app.get("/public/items", async (c) => {
+    c.header("cache-control", "public, max-age=600");
+    return c.json({ items: await listPublicItems(deps.db) });
+  });
+  app.get("/public/items/:id", async (c) => {
+    const item = await publicItem(c.req.param("id"));
+    const doc = item ? await getDocument(deps.storage, item.id) : null;
+    if (!item || !doc) return c.json({ error: "not found" }, 404);
+    c.header("cache-control", "public, max-age=300");
+    return c.json({ item, document: presentDocument(doc, { transcript: "full" }) });
+  });
+  app.get("/public/items/:id/audio", async (c) => {
+    const item = await publicItem(c.req.param("id"));
+    return item ? serveAudio(c, item, "public, max-age=86400") : c.json({ error: "not found" }, 404);
+  });
+  app.get("/public/frames/:id", async (c) => {
+    const f = await getFrame(deps, c.req.param("id"));
+    return f && (await publicItem(f.frame.itemId)) ? frameResponse(f, "public, max-age=86400") : c.json({ error: "not found" }, 404);
+  });
+  app.get("/public/items/:id/export.md", async (c) => {
+    const item = await publicItem(c.req.param("id"));
+    const md = item ? await exportItemMarkdown(deps, item.id, { transcript: c.req.query("transcript") === "1" }) : null;
+    return md ? c.text(md, 200, { "content-type": "text/markdown; charset=utf-8", "content-disposition": `inline; filename="${c.req.param("id")}.md"` }) : c.json({ error: "not found" }, 404);
+  });
+  app.get("/public/items/:id/export.txt", async (c) => {
+    const item = await publicItem(c.req.param("id"));
+    const txt = item ? await exportItemText(deps, item.id, { transcript: c.req.query("transcript") !== "0" }) : null;
+    return txt ? c.text(txt, 200, { "content-type": "text/plain; charset=utf-8", "content-disposition": `inline; filename="${c.req.param("id")}.txt"` }) : c.json({ error: "not found" }, 404);
+  });
+  app.post("/public/items/:id/events", async (c) => {
+    const item = await publicItem(c.req.param("id"));
+    if (!item) return c.json({ error: "not found" }, 404);
+    await logEvent(deps.db, item.id, "read", null); // an anonymous read still counts (PRD §11)
+    return c.json({ ok: true });
   });
 
   // ---- Who is calling? Everything below needs a principal. ----
@@ -295,7 +357,7 @@ export function createApp(deps: AppDeps) {
   app.get("/frames/:id", async (c) => {
     const f = await getFrame(deps, c.req.param("id"));
     if (!f || !(await ownItem(c, f.frame.itemId))) return c.json({ error: "frame not found" }, 404);
-    return new Response(Buffer.from(f.data), { status: 200, headers: { "content-type": f.mimeType, "cache-control": "private, max-age=3600", "x-frame-t": String(f.frame.t) } });
+    return frameResponse(f, "private, max-age=3600");
   });
 
   app.get("/entities", async (c) => {
@@ -343,19 +405,7 @@ export function createApp(deps: AppDeps) {
   app.get("/items/:id/audio", async (c) => {
     const item = await ownItem(c, c.req.param("id"));
     if (!item) return c.json({ error: "item not found" }, 404);
-    const key = audioKey(item.id);
-    if (!(await deps.storage.exists(key))) return c.json({ error: "no audio for this item" }, 404);
-    const bytes = await deps.storage.get(key);
-    const type = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 ? "audio/wav" : "audio/ogg"; // RIFF → WAV (fakes), else Opus/OGG
-    const range = c.req.header("range");
-    const m = range?.match(/^bytes=(\d*)-(\d*)$/);
-    if (m && (m[1] || m[2])) {
-      const start = m[1] ? Number(m[1]) : Math.max(0, bytes.byteLength - Number(m[2]));
-      const end = m[1] && m[2] ? Math.min(Number(m[2]), bytes.byteLength - 1) : bytes.byteLength - 1;
-      if (start > end || start >= bytes.byteLength) return c.body(null, 416, { "content-range": `bytes */${bytes.byteLength}` });
-      return c.body(bytes.slice(start, end + 1) as unknown as ArrayBuffer, 206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${bytes.byteLength}`, "content-length": String(end - start + 1), "cache-control": "private, max-age=3600" });
-    }
-    return c.body(bytes as unknown as ArrayBuffer, 200, { "content-type": type, "accept-ranges": "bytes", "content-length": String(bytes.byteLength), "cache-control": "private, max-age=3600" });
+    return serveAudio(c, item, "private, max-age=3600");
   });
 
   // ---- Language mode + Practice (PRD §6.3) — the queue is personal ----

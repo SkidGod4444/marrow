@@ -3,7 +3,10 @@ import { LoginForm } from "@/components/marrow/login-form";
 import { AUTH_ENABLED, getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Create an account" };
+import type { Metadata } from "next";
+import { SITE_DESCRIPTION } from "@/lib/seo";
+
+export const metadata: Metadata = { title: "Create an account", description: SITE_DESCRIPTION, robots: { index: true, follow: true }, alternates: { canonical: "/signup" } };
 
 export default async function SignupPage({ searchParams }: PageProps<"/signup">) {
   if (!AUTH_ENABLED) redirect("/");

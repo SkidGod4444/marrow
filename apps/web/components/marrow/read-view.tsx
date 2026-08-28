@@ -18,7 +18,7 @@ import { TimestampButton } from "./timestamp-link";
 type Paragraph = { speaker: string; t_start: number; t_end: number; text: string };
 
 /** The shared page: the item as a document — with the player (hideable; audio keeps going) and dialogue timecodes that seek it. */
-export function ReadView({ doc }: { doc: PresentedDocument }) {
+export function ReadView({ doc, mediaBase = "/api/marrow" }: { doc: PresentedDocument; /** "/api/marrow/public" on the share page: no session needed for frames, audio, exports */ mediaBase?: string }) {
   // Remembered per browser (persisted UI store); hydration-safe: start visible, apply the preference after mount.
   const hiddenPref = useUiStore((s) => s.sharedPlayerHidden);
   const setHiddenPref = useUiStore((s) => s.setSharedPlayerHidden);
@@ -43,11 +43,11 @@ export function ReadView({ doc }: { doc: PresentedDocument }) {
   const multi = new Set(entries.map((e) => e.speaker)).size > 1;
   const text = isTextKind(doc.source_type);
   const videoId = doc.source_type === "youtube_video" ? youtubeId(doc.source_url) : null;
-  const audioSrc = !text && !videoId && doc.pipeline.stages_completed.includes("fetch") ? `/api/marrow/items/${doc.id}/audio` : null;
+  const audioSrc = !text && !videoId && doc.pipeline.stages_completed.includes("fetch") ? `${mediaBase}/items/${doc.id}/audio` : null;
   const hasPlayer = Boolean(videoId || audioSrc);
 
   return (
-    <PlayerProvider videoId={videoId} audioSrc={audioSrc}>
+    <PlayerProvider videoId={videoId} audioSrc={audioSrc} mediaBase={mediaBase}>
       <article className="mx-auto max-w-3xl space-y-8">
         <div data-no-print className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/items/${doc.id}`} className="text-[13px] text-muted-foreground hover:text-foreground">
@@ -60,7 +60,7 @@ export function ReadView({ doc }: { doc: PresentedDocument }) {
                 {showPlayer ? (videoId ? "Hide video" : "Hide player") : videoId ? "Show video" : "Show player"}
               </Button>
             )}
-            <ShareMenu itemId={doc.id} title={doc.title} onSharedPage />
+            <ShareMenu itemId={doc.id} title={doc.title} onSharedPage apiBase={mediaBase} />
           </div>
         </div>
 

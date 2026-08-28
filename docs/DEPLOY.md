@@ -114,7 +114,7 @@ Updating: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 3. **Environment variables** (Production + Preview):
    - `MARROW_API_URL` = `https://api.marrow.yourdomain.com`
    - `MARROW_API_KEY` = the same value as in the server's `.env`
-   - `NEXT_PUBLIC_SITE_URL` = `https://marrow.yourdomain.com` (optional; falls back to the Vercel production URL)
+   - `NEXT_PUBLIC_SITE_URL` = `https://marrow.yourdomain.com` — the public share pages' canonical URLs, the sitemap and OpenGraph use it (falls back to the Vercel production URL)
 4. Deploy. Then *Settings → Domains* → add `marrow.yourdomain.com` and create the CNAME Vercel shows at your registrar.
 5. Open `https://marrow.yourdomain.com`, **create your account** — the first workspace made on a fresh instance adopts any namespaces that already exist (see "Accounts" below) — and invite your people from Settings. Then check the inbox, an item page, and a Share link. Chat streams go through the web app's `/api/marrow/*` proxy, which is limited to 60 s per response on Vercel Hobby (`maxDuration`); raise it in `app/api/marrow/[...path]/route.ts` on Pro.
 

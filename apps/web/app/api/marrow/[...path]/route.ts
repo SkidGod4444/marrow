@@ -10,14 +10,15 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const ALLOW =
-  /^(me|items\/[^/]+\/(chat|events|archive|usage|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
+  /^(public\/(items|items\/[^/]+|items\/[^/]+\/(audio|events|export\.md|export\.txt)|frames\/[^/]+)|me|items\/[^/]+\/(chat|events|archive|usage|export\.md|export\.txt|audio|expressions|expressions\/\d+\/save|clips\/\d+)|frames\/[^/]+|ingest|capture|inbox|namespaces|namespaces\/[^/]+|namespaces\/[^/]+\/(graph|chat|poll|summary)|sources|sources\/[^/]+|sources\/[^/]+\/poll|jobs\/[^/]+|search|reviews|reviews\/summary|reviews\/[^/]+\/answer)$/;
 
 async function proxy(req: Request, ctx: RouteContext<"/api/marrow/[...path]">): Promise<Response> {
   const { path } = await ctx.params;
   const target = path.join("/");
   if (!ALLOW.test(target)) return Response.json({ error: "not proxied" }, { status: 404 });
   // Requests run as the signed-in user (their cookie is forwarded); strangers get nothing.
-  if (AUTH_ENABLED && !(await getSession())) return Response.json({ error: "sign in first" }, { status: 401 });
+  // /public/* is the share pages' read-only twin: no session needed (the API allows only ready items there).
+  if (AUTH_ENABLED && !target.startsWith("public/") && !(await getSession())) return Response.json({ error: "sign in first" }, { status: 401 });
   const url = new URL(req.url);
   let upstream: Response;
   try {

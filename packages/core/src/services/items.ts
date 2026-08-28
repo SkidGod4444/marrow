@@ -13,6 +13,11 @@ export async function setItemMetadata(db: Db, id: string, meta: { title?: string
   await db.update(items).set({ ...meta, updatedAt: new Date() }).where(eq(items.id, id));
 }
 
+/** Ready items across the instance, for the public sitemap: id, title, and when they last changed. */
+export async function listPublicItems(db: Db, limit = 5000): Promise<Array<{ id: string; title: string; updatedAt: Date }>> {
+  return db.select({ id: items.id, title: items.title, updatedAt: items.updatedAt }).from(items).where(eq(items.status, "ready")).orderBy(desc(items.updatedAt)).limit(limit);
+}
+
 export type ItemWithJob = Item & { job?: JobProgress; usage?: { cost_usd: number; tokens: number } };
 
 /** Items of a namespace, newest first; the ones still in flight (or failed) carry their latest job's progress. */

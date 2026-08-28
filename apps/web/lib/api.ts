@@ -45,6 +45,9 @@ export const api = {
   namespaces: () => apiFetch<{ namespaces: NamespaceSummary[] }>("/namespaces").then((r) => r.namespaces),
   items: (namespace: string, status?: string) => apiFetch<{ items: ItemWithJob[] }>(`/items?namespace=${encodeURIComponent(namespace)}${status ? `&status=${status}` : ""}`).then((r) => r.items),
   item: (id: string) => apiFetch<{ item: Item }>(`/items/${id}`).then((r) => r.item),
+  // Public share pages — no session, ready items only (the API's /public/* routes).
+  publicItem: (id: string) => apiFetch<{ item: Item; document: PresentedDocument }>(`/public/items/${id}`),
+  publicItems: () => apiFetch<{ items: Array<{ id: string; title: string; updatedAt: string }> }>("/public/items").then((r) => r.items),
   usage: (id: string) => apiFetch<{ usage: ItemUsage }>(`/items/${id}/usage`).then((r) => r.usage),
   document: (id: string) => apiFetch<PresentedDocument>(`/items/${id}/document?transcript=full`),
   graph: (namespace: string) => apiFetch<NamespaceGraph>(`/namespaces/${encodeURIComponent(namespace)}/graph`),
