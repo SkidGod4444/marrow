@@ -11,8 +11,8 @@ test.describe("item page: reader, chat, transcript, share (PRD §6.1–6.2)", ()
     await expect(page.getByText("Chapters", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "05:00" }).first()).toBeVisible();
     // reader: summary, takeaways, sections with headings, ask-about-section buttons
-    await expect(page.getByText("Summary", { exact: true })).toBeVisible();
-    await expect(page.getByText("Takeaways", { exact: true })).toBeVisible();
+    await expect(page.getByText("Summary", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Takeaways", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Method" })).toBeVisible();
     await expect(page.getByRole("button", { name: /ask about "method"/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /share/i })).toBeVisible();
@@ -69,7 +69,7 @@ test.describe("item page: reader, chat, transcript, share (PRD §6.1–6.2)", ()
   test("shared page: article, transcript toggle, player toggle, back link", async ({ page }) => {
     const video = await readyItem((i) => i.sourceType === "youtube_video");
     await page.goto(`/items/${video.id}/read`);
-    await expect(page.getByText("Summary", { exact: true })).toBeVisible();
+    await expect(page.getByText("Summary", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: /show full transcript/i }).click();
     await expect(page.getByText(/we talk about the Tobin/i).first()).toBeVisible();
     await page.getByRole("button", { name: /hide transcript/i }).click();
