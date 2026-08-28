@@ -73,6 +73,10 @@ export const ConfigSchema = z.object({
   FRAME_WIDTH: z.coerce.number().default(1280),
   MAX_VIDEO_HEIGHT: z.coerce.number().default(720),
   VISION_CONCURRENCY: z.coerce.number().default(6),
+  // Audio chunks transcribed in parallel (API-bound); 3 keeps a 2-hour podcast under a few minutes without tripping rate limits.
+  STT_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(3),
+  // Ingest jobs run at the same time. Each one runs ffmpeg/yt-dlp: on a 1 GB box keep it at 1–2, on 2 GB+ 2–3.
+  INGEST_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
   YTDLP_BIN: z.string().default("yt-dlp"),
   FFMPEG_BIN: z.string().default("ffmpeg"),
   FFPROBE_BIN: z.string().default("ffprobe"),

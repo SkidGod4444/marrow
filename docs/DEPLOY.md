@@ -79,6 +79,8 @@ INBOUND_EMAIL_TOKEN=<openssl rand -hex 24>   # only if you wire inbound email (d
 MARROW_API_DOMAIN=api.marrow.yourdomain.com
 ```
 
+**How you know S3 is not set up:** `curl https://api…/health` shows `"storage":"error"`, the server log has `[storage] s3 check failed: Could not load credentials from any providers`, and every ingest lands in the inbox as *failed — Reason: Could not load credentials…* (the broker retries it twice first, so it sits on "Queued" for about a minute). Fix the credentials (below), then press **Retry** on the card.
+
 **S3 credentials without keys (recommended):** EC2 → the instance → *Actions → Security → Modify IAM role* → create a role `marrow-ec2` with an inline policy allowing `s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket` on your bucket (and `arn:...:bucket/*`). The AWS SDK inside the server container picks the role up automatically — leave `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` empty. (Fallback: IAM → Users → create `marrow-s3` with the same policy → access key → put the pair in `.env`.)
 
 ## 6. Launch
@@ -144,6 +146,33 @@ git rev-parse --short origin/main                     # what both should say
 The API's `commit` is the `GIT_SHA` build argument `scripts/deploy-ec2.sh` passes to the image (`"unknown"` when the image was built by hand without it); `started_at` moves on every restart. Vercel's comes from its system variable `VERCEL_GIT_COMMIT_SHA` — if it reads `null`, turn on *Automatically expose System Environment Variables* (Project → Settings → Environment Variables) and redeploy. If the API lags `origin/main` for more than a couple of minutes, read the timer's log on the box: `journalctl -u marrow-deploy.service -n 50`. One quirk: the deploy script updates itself, but the copy already running finishes as it was — so a change to `scripts/deploy-ec2.sh` takes effect on the deploy *after* the one that pulled it.
 
 **Every API deploy restarts the server** (image built first, then the container is replaced): roughly 10–20 s during which Caddy answers 502/503. The web app rides that out — page loads and reads retry for about a second (`apps/web/lib/http.ts`), a reply cut off mid-restart is treated as a failure rather than data, and if the window is longer the page says *"This page couldn't load … it may be restarting after an update"* with a **Try again** that re-fetches. Writes (adding, chatting) are never retried automatically; the person sees a plain "try again in a moment". If you want zero-downtime deploys later, run two server containers behind Caddy and swap them (`docker-compose.prod.yml` is a single service today).
+
+### The box: memory, swap, and how many jobs at once
+
+A `t4g.micro` (1 GB, no swap) runs the server fine but not comfortably: `docker compose … --build` alone has OOM-killed the running server during a deploy, and an ingest runs `yt-dlp` + `ffmpeg` on top of the server. Two things help:
+
+```bash
+# 2 GB swap (once; survives reboots) — turns "killed" into "slower" when memory spikes
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab; sudo sysctl -w vm.swappiness=10
+```
+
+and, if you ingest more than the odd video, resize to a **`t4g.small` (2 GB)** — same ARM family, stop → *Instance type* → start, five minutes, ~$12/month before credits. `INGEST_CONCURRENCY` in `.env` sets how many jobs run at once (default 1; 2 is fine on 1 GB with swap, 3 on 2 GB); `STT_CONCURRENCY` (default 3) is how many audio chunks go to the transcription API in parallel.
+
+Looking at the tables without installing anything: `docker run --rm --network host -e PGSSLMODE=require postgres:16-alpine psql "$DATABASE_URL" -c "select state, count(*) from jobs group by 1"` (the broker's own view is `pgboss.job`, its error text in `output`).
+
+### Ingests during a deploy, and "why is it still queued?"
+
+The pipeline runs **one job at a time** inside the server (pg-boss, `batchSize: 1`): a second video waits until the first finishes, and a followed playlist can queue several at once — that alone can mean minutes in "Queued". A deploy replaces the container: the old one gets up to 100 s (`stop_grace_period`) to finish the stage it is on, and whatever is still unfinished is **re-queued when the new container boots** (`recoverJobs`, plus the broker's orphaned `active` rows are released) and resumes at the interrupted stage. Nothing needs a hand.
+
+`GET /health` shows the queue without a key:
+
+```json
+{ "ok": true, "commit": "…", "started_at": "…",
+  "queue": { "driver": "pg-boss", "queued": 2, "running": 1, "failed": 0, "oldest_queued_s": 340, "running_since_progress_s": 95 } }
+```
+
+Read it as: `running: 1` with `running_since_progress_s` ticking up past a few minutes → a stage is slow (transcribing an hour of audio takes ~3–4 min; `yt-dlp` on a throttled download can take longer); `queued > 0, running: 0` for more than a minute → the worker isn't picking jobs up (`docker compose -f docker-compose.prod.yml logs --tail=100 server` on the box; look for `[pg-boss]`). A job that hangs is expired by the broker after an hour and retried twice.
 
 ## Accounts
 

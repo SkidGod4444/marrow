@@ -1,4 +1,5 @@
 import { mkdir, stat } from "node:fs/promises";
+import { pMap } from "../../util.ts";
 import { join } from "node:path";
 import { audioKey, type TranscriptEntry, type Word } from "../../document.ts";
 import { isTextSource } from "../../ids.ts";
@@ -33,11 +34,20 @@ export const transcribeStage: StageFn = async (ctx) => {
     }
   }
 
+  // Chunks go to the STT API in parallel (it is the long pole of the whole pipeline); results are stitched in order.
+  const results: SttResult[] = Array.from({ length: chunks.length });
+  await pMap(
+    chunks,
+    async (c, i) => {
+      log(`transcribing ${chunks.length > 1 ? `chunk ${i + 1}/${chunks.length}` : "audio"}`);
+      results[i] = await providers.transcribe(c.path, usage);
+    },
+    config.STT_CONCURRENCY,
+  );
   const entries: TranscriptEntry[] = [];
   let language: string | null = null;
   for (const [i, c] of chunks.entries()) {
-    log(`transcribing ${chunks.length > 1 ? `chunk ${i + 1}/${chunks.length}` : "audio"}`);
-    const r = await providers.transcribe(c.path, usage);
+    const r = results[i]!;
     language ??= r.language;
     entries.push(...toEntries(r, c.offset));
   }

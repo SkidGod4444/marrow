@@ -94,7 +94,7 @@ describe("REST app (Phase 1 endpoints)", () => {
   it("requires the owner API key when MARROW_API_KEY is set", async () => {
     const app = createApp({ ...env, config: { ...env.config, MARROW_API_KEY: "secret", MARROW_COMMIT: "abc1234" }, queue: new InProcessQueue(), embedQuery: async (q) => fakeEmbedding(q) });
     expect((await app.request("/health")).status).toBe(200);
-    expect(await (await app.request("/health")).json()).toMatchObject({ ok: true, commit: "abc1234", started_at: expect.any(String) });
+    expect(await (await app.request("/health")).json()).toMatchObject({ ok: true, commit: "abc1234", started_at: expect.any(String), queue: { driver: "in-process", queued: 0, running: 0 } });
     expect((await app.request("/namespaces")).status).toBe(401);
     expect((await app.request("/namespaces", { headers: { "x-api-key": "wrong" } })).status).toBe(401);
     expect((await app.request("/namespaces", { headers: { "x-api-key": "secret" } })).status).toBe(200);

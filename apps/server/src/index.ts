@@ -1,4 +1,4 @@
-import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob } from "@marrow/core";
+import { InProcessQueue, PgBossQueue, createDb, databaseSsl, createProviders, createStorage, loadConfig, pollAllSources, runJob, recoverJobs, failJobIfUnstarted, probeStorage } from "@marrow/core";
 import { createApp } from "./app.ts";
 import { createAuth } from "./auth.ts";
 import { pollDeps, realRetrieval } from "./deps.ts";
@@ -13,9 +13,33 @@ const storage = createStorage(config);
 const providers = fakeDeps?.providers ?? createProviders(config);
 
 const queue = config.DATABASE_URL ? new PgBossQueue(config.DATABASE_URL, databaseSsl(config.DATABASE_URL, { mode: config.DATABASE_SSL, caPath: config.DATABASE_SSL_CA })) : new InProcessQueue();
-await queue.start(async (jobId) => {
-  await runJob({ db, storage, config, providers, log: (m) => console.log(`[job ${jobId}] ${m}`) }, jobId);
-});
+// Storage check at boot and every 5 minutes: on GET /health as `storage`, and loud in the log — with empty S3
+// credentials every ingest would otherwise fail silently at its first storage call.
+let storageStatus: "ok" | "error" | "unknown" = "unknown";
+const checkStorage = async () => {
+  const r = await probeStorage(storage);
+  if (r.status === "error" && storageStatus !== "error") console.error(`[storage] ${config.STORAGE_DRIVER} check failed: ${r.error} — ingests will fail until this is fixed (docs/DEPLOY.md, "S3 credentials")`);
+  if (r.status === "ok" && storageStatus === "error") console.log("[storage] check passes again");
+  storageStatus = r.status;
+};
+await checkStorage();
+setInterval(() => void checkStorage(), 5 * 60_000).unref();
+
+await queue.start(
+  async (jobId) => {
+    try {
+      await runJob({ db, storage, config, providers, log: (m) => console.log(`[job ${jobId}] ${m}`) }, jobId);
+    } catch (err) {
+      // The runner records stage failures itself; anything that threw before a stage ran (no storage credentials,
+      // a missing row) would otherwise leave the item on "queued" forever with the reason only in the broker.
+      if (await failJobIfUnstarted(db, jobId, err).catch(() => false)) console.error(`[job ${jobId}] failed before it could start: ${(err as Error).message}`);
+      throw err;
+    }
+  },
+  { concurrency: config.INGEST_CONCURRENCY },
+);
+// Whatever the previous process left queued or running (a deploy restarts the server) goes back on the queue now.
+await recoverJobs(db, queue, (m) => console.log(`[queue] ${m}`));
 
 // PRD §6.4/§7: poll subscribed playlists/channels/feeds on a schedule (pg-boss cron on Postgres, a timer on PGlite).
 if (config.POLL_EVERY_MINUTES > 0) {
@@ -31,12 +55,13 @@ if (fake && fakeDeps) {
   const seeded = await fake.seedFakeAccounts(db, auth, (m) => console.log(`[fake] ${m}`));
   if (process.env.MARROW_FAKE_SEED !== "0") await fake.seedFakeCorpus({ db, storage, config, providers: fakeDeps.providers, organizationId: seeded.organizationId }, (m) => console.log(`[fake] ${m}`));
 }
-const deps = fakeDeps ? { db, storage, config, queue, auth, ...fakeDeps } : { db, storage, config, queue, auth, ...realRetrieval(config) };
+const health = { storage: () => storageStatus };
+const deps = fakeDeps ? { db, storage, config, queue, auth, health, ...fakeDeps } : { db, storage, config, queue, auth, health, ...realRetrieval(config) };
 const app = createApp(deps);
 
 const server = Bun.serve({ port: config.PORT, fetch: app.fetch, idleTimeout: 120 });
 console.log(
-  `marrow server on http://localhost:${server.port} (db: ${driver}, storage: ${config.STORAGE_DRIVER}, queue: ${config.DATABASE_URL ? "pg-boss" : "in-process"}, poll: ${config.POLL_EVERY_MINUTES ? `every ${config.POLL_EVERY_MINUTES}m` : "off"}, mcp: /mcp, accounts: ${config.MARROW_AUTH === "on" ? `on (web origin ${config.MARROW_WEB_URL})` : "OFF"}${fake ? " — FAKE MODE (no OpenAI/yt-dlp)" : ""}${config.MARROW_API_KEY ? "" : " — WARNING: MARROW_API_KEY unset, API is open"})`,
+  `marrow server on http://localhost:${server.port} (db: ${driver}, storage: ${config.STORAGE_DRIVER}, queue: ${config.DATABASE_URL ? "pg-boss" : "in-process"} ×${config.INGEST_CONCURRENCY}, storage check: ${storageStatus}, poll: ${config.POLL_EVERY_MINUTES ? `every ${config.POLL_EVERY_MINUTES}m` : "off"}, mcp: /mcp, accounts: ${config.MARROW_AUTH === "on" ? `on (web origin ${config.MARROW_WEB_URL})` : "OFF"}${fake ? " — FAKE MODE (no OpenAI/yt-dlp)" : ""}${config.MARROW_API_KEY ? "" : " — WARNING: MARROW_API_KEY unset, API is open"})`,
 );
 
 // Close the DB on the way out: PGlite on disk must be shut down cleanly or the next start can abort in WASM.

@@ -2,12 +2,7 @@ import { Hono } from "hono";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { UIMessage } from "ai";
 import { timingSafeEqual } from "node:crypto";
-import {
-  addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown,
-  getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent,
-  lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES,
-  streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace,
-} from "@marrow/core";
+import { addSource, answerReview, archiveItem, audioKey, captureEmail, clipKey, createCapture, createIngest, createNamespace, deleteNamespace, exportItemMarkdown, exportItemText, exportNamespaceMarkdown, getContext, getDocument, getFrame, getItem, getJobStatus, getNamespace, getNamespaceGraph, getOrganization, listEntities, listExpressions, listInbox, listItems, listNamespaces, listSources, logEvent, lookupEntity, normalizeInboundEmail, organizationsOf, pollAllSources, pollSource, presentDocument, refreshNamespaceSummary, removeSource, reviewQueue, reviewSummary, saveExpression, SOURCE_TYPES, streamNamespaceChat, streamVideoChat, type CaptureInput, type Namespace, type SourceKind, unsaveExpression, updateNamespace, queueStats } from "@marrow/core";
 import { type ServerDeps, captureDeps, pollDeps, runSearch } from "./deps.ts";
 import { createMcpServer } from "./mcp.ts";
 import { type Principal, can, hasScope, permissions, resolvePrincipal, scopeOf } from "./principal.ts";
@@ -27,7 +22,16 @@ export function createApp(deps: AppDeps) {
   const principalDeps = { db: deps.db, auth: deps.auth, instanceKey: deps.config.MARROW_API_KEY, authOff: deps.config.MARROW_AUTH === "off" };
 
   // Which build is serving (commit from the Docker build arg) and since when — enough to verify a deploy with one curl.
-  app.get("/health", (c) => c.json({ ok: true, commit: deps.config.MARROW_COMMIT ?? null, started_at: STARTED_AT }));
+  app.get("/health", async (c) =>
+    c.json({
+      ok: true,
+      commit: deps.config.MARROW_COMMIT ?? null,
+      started_at: STARTED_AT,
+      // Can it store things, and is the pipeline moving? Counts and states only — safe to read without a key.
+      storage: deps.health?.storage() ?? "unknown",
+      queue: { driver: deps.config.DATABASE_URL ? "pg-boss" : "in-process", ...(await queueStats(deps.db)) },
+    }),
+  );
 
   // ---- Accounts, workspaces, API keys (Better Auth) — proxied by the web app; public by design ----
   if (deps.auth) {

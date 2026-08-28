@@ -78,7 +78,10 @@ export function InboxList({ entries, pending, showNamespace }: { entries: InboxE
                 </p>
                 <h2 className="reading text-[20px] font-semibold leading-snug tracking-tight">{p.title || p.sourceUrl.replace(/^https?:\/\/(www\.)?/, "")}</h2>
                 {p.status === "failed" ? (
-                  <p className="reading text-[15px] text-foreground/75">We couldn&apos;t finish this one. Retrying picks up where it stopped.</p>
+                  <div className="space-y-1">
+                    <p className="reading text-[15px] text-foreground/75">We couldn&apos;t finish this one. Retrying picks up where it stopped.</p>
+                    {p.job?.error && <p className="font-mono text-[11px] text-muted-foreground line-clamp-2">Reason: {p.job.error.replace(/^[a-z]+: /, "")}</p>}
+                  </div>
                 ) : p.job ? (
                   <IngestProgress job={p.job} sourceType={p.sourceType} durationS={p.durationS} />
                 ) : (

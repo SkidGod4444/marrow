@@ -13,6 +13,9 @@ services:
       WORK_DIR: /data/work
     volumes: [workdata:/data]
     restart: unless-stopped
+    # A deploy replaces the container: give the server time to finish the stage it is on (it waits up to 90 s for
+    # in-flight jobs); anything still unfinished is re-queued when the new container boots.
+    stop_grace_period: 100s
     expose: ["3001"]
 
   caddy:
